@@ -1,5 +1,5 @@
 """@package docstring
-CalImageForce: class for calculating forces on dislocation network
+CalRemoteForce: class for calculating forces on dislocation network
 
 Provide force calculation functions given a DisNet object
 """
@@ -11,15 +11,15 @@ import numpy as np
 from pydis.disnet import DisNet, Tag
 from framework.disnet_manager import DisNetManager
 
-class CalImageStress():
+class CalRemoteStress():
     """CalForce_DisNet: class for calculating forces on dislocation network
     """
     def __init__(self, state: dict={}) -> None:
         pass
 
-    def CalImageStress(self, DM: DisNetManager, state: dict) -> dict:
-        """AddImageForce: add image force from image stress on nodes
+    def CalRemoteStress(self, DM: DisNetManager, state: dict) -> dict:
+        """AddRemoteForce: add remote force from remote stress on nodes
 
         """
-        print("CalImageStress: CalImageStress")
+        print("CalRemoteStress: CalRemoteStress")
         return state
