@@ -68,7 +68,7 @@ class SimulationDriver(SimulateNetwork):
 
         #ToDo: may need to write a combined Topology class for both bulk and surface nodes
         if self.surface_topology is not None:
-            self.surface_topology.Handle(DM, state)        
+            self.surface_topology.Handle(DM, state)
 
         if self.collision is not None:
             self.collision.HandleCol(DM, state)
