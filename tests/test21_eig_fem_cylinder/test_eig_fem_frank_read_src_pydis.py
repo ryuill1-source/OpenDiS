@@ -10,23 +10,10 @@ from pydis import DisNode, DisNet, Cell, CellList
 from pydis import CalForce as CalForce_Bulk, MobilityLaw as MobilityLaw_Bulk, TimeIntegration, Topology
 from pydis import Collision, Remesh, VisualizeNetwork
 
-from eig_fem_dis import SimulationDriver, CalRemoteStress, CalForce, Surface_Topology
+from eig_fem_dis import SimulationDriver, CalForce, Surface_Topology
 from eig_fem_dis import CalForce as CalForce_withSurface, MobilityLaw as MobilityLaw_withSurface
 
 from eig_fem_dis import run_abaqus
-
-# ABAQUS input file and user subroutine file should be placed in foldername_ABAQUS
-config = {
-        "jobname_head": '',
-        "ABAQUS_input_filename": 'test_eig_fem_elastic_VUMAT_control',
-        "num_cpus": 1,
-        "umatname": 'test_eig_fem_elastic_VUMAT_control.for',
-        "foldername_ABAQUS": 'ABAQUS',
-        # "cmd_env": 'setenv.bat', 
-    }
-
-# Initiate ABAQUS run, ABAQUS starts and waits until "ABAQUS_running" flag is shown.
-run_abaqus(config)
 
 def init_frank_read_src_loop(arm_length=1.0, box_length=8.0, burg_vec=np.array([1.0,0.0,0.0]), pbc=False):
     '''Generate an initial Frank-Read source configuration
@@ -67,7 +54,7 @@ def main():
     collision = Collision(collision_mode='Proximity', state=state, nbrlist=nbrlist)
     remesh    = Remesh(remesh_rule='LengthBased', state=state)
 
-    remote_stress = CalRemoteStress(state=state)
+    #remote_stress = CalRemoteStress(state=state)
     calforce = CalForce_withSurface(state=state, calforce_bulk=calforce_bulk)
     mobility = MobilityLaw_withSurface(state=state, mobility_bulk=mobility_bulk)
 
@@ -77,8 +64,9 @@ def main():
 
     sim = SimulationDriver(calforce=calforce, mobility=mobility, timeint=timeint,
                           topology=topology, collision=collision, remesh=remesh, vis=vis,
-                          remote_stress=remote_stress, surface_topology=surface_topology,
-                          state=state, max_step=20, loading_mode="stress",
+                          #remote_stress=remote_stress,
+                          surface_topology=surface_topology,
+                          state=state, max_step=5, loading_mode="stress",
                           applied_stress=np.array([0.0, 0.0, 0.0, 0.0, -4.0e8, 0.0]),
                           print_freq=10, plot_freq=10, plot_pause_seconds=0.01,
                           write_freq=10, write_dir='output', save_state=False)
@@ -88,6 +76,19 @@ def main():
 
 
 if __name__ == "__main__":
+    # ABAQUS input file and user subroutine file should be placed in foldername_ABAQUS
+    config = {
+            "jobname_head": '',
+            "ABAQUS_input_filename": 'test_eig_fem_elastic_VUMAT_control',
+            "num_cpus": 1,
+            "umatname": 'test_eig_fem_elastic_VUMAT_control.for',
+            "foldername_ABAQUS": 'ABAQUS',
+            # "cmd_env": 'setenv.bat',
+        }
+
+    # Initiate ABAQUS run, ABAQUS starts and waits until "ABAQUS_running" flag is shown.
+    run_abaqus(config)
+
     main()
 
     # explore the network after simulation

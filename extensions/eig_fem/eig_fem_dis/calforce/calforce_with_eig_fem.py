@@ -24,23 +24,24 @@ class CalForce(CalForce_Base):
 
         """
         print("CalForce: AddRemoteForce")
-        # Call CalRemoteStress.ReadRemoteStress(DM, state)
+        state = self.ReadRemoteStress(DM, state)
         # Add remote force to dislocation nodes
         return state
 
     def CalEigstrainField(self, DM: DisNetManager, state: dict) -> dict:
         # calculate eigstrain field from dislocation motion from previous step
+        print("CalForce: CalEigstrainField")
         return state
 
     def CalRemoteStress(self, DM: DisNetManager, state: dict) -> dict:
         """AddRemoteForce: add remote force from remote stress on nodes
 
         """
-        print("CalRemoteStress: CalRemoteStress")
+        print("CalForce: CalRemoteStress")
         state = self.CalEigstrainField(DM, state)
         # export eig strain increment (from previous step)
+        print("  remove ABAQUS_pause.flag file")
         # remove ABAQUS_pause.flag
-        # call function in the remote_stress module
         return state
 
     def ReadRemoteStress(self, DM: DisNetManager, state: dict) -> dict:
@@ -48,6 +49,7 @@ class CalForce(CalForce_Base):
 
         """
         print("CalRemoteStress: ReadRemoteStress")
+        print("  check whether ABAQUS_stress_ready.flag file exists")
         # Check whether ABAQUS_stress_ready.flag exists
         # if not wait for 250 ms and check again
         # If stress ready, ready stress from file and evaluate remote force

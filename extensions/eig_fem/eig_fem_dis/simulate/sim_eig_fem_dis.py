@@ -31,12 +31,13 @@ class SimulationDriver(SimulateNetwork):
            extends SimulateNetwork from PyDiS
     """
     def __init__(self, state: dict,
-                 image_stress=None, image_force=None, surface_mobility=None, surface_topology=None,
+                 #image_stress=None, image_force=None,
+                 surface_mobility=None, surface_topology=None,
                  **kwargs) -> None:
         super().__init__(state, **kwargs)
 
-        self.image_stress = image_stress
-        self.image_force = image_force
+        #self.image_stress = image_stress
+        #self.image_force = image_force
         self.surface_mobility = surface_mobility
         self.surface_topology = surface_topology
 
@@ -46,14 +47,15 @@ class SimulationDriver(SimulateNetwork):
     def step_begin(self, DM: DisNetManager, state: dict):
         """step_begin: invoked at the begining of each time step
         """
-        if self.image_stress is not None:
+        #if self.image_stress is not None:
             # skip first step
             # starting from second step
             # should call FEMRemotStress(DM, state)
             # export eig strain increment (from previous step)
             # remove ABAQUS_pause.flag
             # call function in the remote_stress module
-            pass
+        self.calforce.CalRemoteStress(DM, state)
+        pass
 
     def step_integrate(self, DM: DisNetManager, state: dict):
         """step_integrate: invoked for time-integration at each time step

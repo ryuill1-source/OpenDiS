@@ -12,10 +12,9 @@ from pydis import DisNode, DisNet, Cell, CellList
 from pydis import CalForce as CalForce_Bulk, MobilityLaw as MobilityLaw_Bulk, TimeIntegration, Topology
 from pydis import Collision, Remesh, VisualizeNetwork
 
-from eig_fem_dis import SimulationDriver, CalRemoteStress, CalForce, Surface_Topology
+from eig_fem_dis import SimulationDriver, CalForce, Surface_Topology
 from eig_fem_dis import CalForce as CalForce_withSurface, MobilityLaw as MobilityLaw_withSurface
 
-#from eig_fem_dis.abaqus import run_abaqus
 from eig_fem_dis import run_abaqus
 
 # ABAQUS input file and user subroutine file should be placed in foldername_ABAQUS
@@ -25,9 +24,7 @@ config = {
         "num_cpus": 1,
         "umatname": 'test_elastic_VUMAT_control.for',
         "foldername_ABAQUS": 'ABAQUS',
-
-        # "cmd_env": 'setenv.bat', 
-
+        # "cmd_env": 'setenv.bat',
     }
 
 run_abaqus(config)
