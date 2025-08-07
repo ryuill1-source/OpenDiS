@@ -18,11 +18,12 @@ from eig_fem_dis import CalForce as CalForce_withSurface, MobilityLaw as Mobilit
 #from eig_fem_dis.abaqus import run_abaqus
 from eig_fem_dis import run_abaqus
 
+# ABAQUS input file and user subroutine file should be placed in foldername_ABAQUS
 config = {
         "jobname_head": '',
-        "ABAQUS_input_filename": 'elas_axidisp',
+        "ABAQUS_input_filename": 'test_elastic_VUMAT_control',
         "num_cpus": 1,
-        "umatname": 'elastic.f',
+        "umatname": 'test_elastic_VUMAT_control.for',
         "foldername_ABAQUS": 'ABAQUS',
 
         # "cmd_env": 'setenv.bat', 
