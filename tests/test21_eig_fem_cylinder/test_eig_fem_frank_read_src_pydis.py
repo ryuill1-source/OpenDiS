@@ -13,6 +13,21 @@ from pydis import Collision, Remesh, VisualizeNetwork
 from eig_fem_dis import SimulationDriver, CalRemoteStress, CalForce, Surface_Topology
 from eig_fem_dis import CalForce as CalForce_withSurface, MobilityLaw as MobilityLaw_withSurface
 
+from eig_fem_dis import run_abaqus
+
+# ABAQUS input file and user subroutine file should be placed in foldername_ABAQUS
+config = {
+        "jobname_head": '',
+        "ABAQUS_input_filename": 'test_eig_fem_elastic_VUMAT_control',
+        "num_cpus": 1,
+        "umatname": 'test_eig_fem_elastic_VUMAT_control.for',
+        "foldername_ABAQUS": 'ABAQUS',
+        # "cmd_env": 'setenv.bat', 
+    }
+
+# Initiate ABAQUS run, ABAQUS starts and waits until "ABAQUS_running" flag is shown.
+run_abaqus(config)
+
 def init_frank_read_src_loop(arm_length=1.0, box_length=8.0, burg_vec=np.array([1.0,0.0,0.0]), pbc=False):
     '''Generate an initial Frank-Read source configuration
     '''

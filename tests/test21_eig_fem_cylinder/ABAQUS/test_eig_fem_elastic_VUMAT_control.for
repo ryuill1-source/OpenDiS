@@ -9,15 +9,16 @@
 
       include 'vaba_param.inc'
 	!IMPLICIT DOUBLE PRECISION (a-h,o-z)
-	CHARACTER(*), PARAMETER :: filename_ABAQUS_flag = "ABAQUS_pause"
+	CHARACTER(*), PARAMETER :: filename_ABAQUS_flag = "ABAQUSrunning"
+      
+C     [CAUTION] foldername should be ABSOLUTE PATH !!!!
       CHARACTER(*), PARAMETER :: foldername = "/home/kyeongmi/Codes/OpenDiS.eig_fem.git/tests/test21_eig_fem_cylinder/ABAQUS"
-	CHARACTER(*), PARAMETER :: filename_flag = ""
+	
+      CHARACTER(*), PARAMETER :: filename_flag = ""
       CHARACTER(LEN=200) :: full_filename	
       INTEGER :: MATLABWORKING = 10
 	
       LOGICAL FILEEXISTANCE
-
-C     [CAUTION] foldername should be ABSOLUTE PATH !!!!
 
 C     Elastic material model only
 
@@ -63,23 +64,21 @@ C       Copy state variables unchanged
 
       end do
 
-C  Write the FEMSTRESS file  ***********************************V   
-C  Need to create ABAQUS_stress_ready.flag file  ***********************************V   
-
 C  Control ABAQUS run (pause&go)  ***********************************V   
 C  The following needs to be placed in vexternalDB
-	DO WHILE (.TRUE.)
+	DO WHILE (MATLABWORKING>0)
 		full_filename = TRIM(foldername)//"/"//filename_ABAQUS_flag//TRIM(filename_flag)//".flag"
             PRINT *, "Checking for file: ", TRIM(full_filename)
 
             INQUIRE (FILE=full_filename, EXIST=FILEEXISTANCE)
 		
             IF(FILEEXISTANCE) THEN
-                PRINT *, "FILEEXISTANCE"
-		        CALL SLEEPQQ(250)
+                  PRINT *, "FILEEXISTANCE"
+		      !CALL SLEEPQQ(10000)
+		      MATLABWORKING=0
             ELSE
-                PRINT *, "Not FILEEXISTANCE"
-		        EXIT	
+                  PRINT *, "Not FILEEXISTANCE"
+			MATLABWORKING=0
             END IF
 	END DO
 C  End of Control ABAQUS run (pause&go)  ***********************************V   
