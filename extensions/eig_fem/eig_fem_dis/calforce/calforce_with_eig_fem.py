@@ -12,8 +12,6 @@ from pydis.disnet import DisNet, Tag
 from framework.disnet_manager import DisNetManager
 from framework.calforce_base import CalForce_Base
 
-from .remote_stress.cal_remote_stress import CalRemoteStress
-
 class CalForce(CalForce_Base):
     """CalForce_DisNet: class for calculating forces on dislocation network
     """
@@ -28,6 +26,32 @@ class CalForce(CalForce_Base):
         print("CalForce: AddRemoteForce")
         # Call CalRemoteStress.ReadRemoteStress(DM, state)
         # Add remote force to dislocation nodes
+        return state
+
+    def CalEigstrainField(self, DM: DisNetManager, state: dict) -> dict:
+        # calculate eigstrain field from dislocation motion from previous step
+        return state
+
+    def CalRemoteStress(self, DM: DisNetManager, state: dict) -> dict:
+        """AddRemoteForce: add remote force from remote stress on nodes
+
+        """
+        print("CalRemoteStress: CalRemoteStress")
+        state = self.CalEigstrainField(DM, state)
+        # export eig strain increment (from previous step)
+        # remove ABAQUS_pause.flag
+        # call function in the remote_stress module
+        return state
+
+    def ReadRemoteStress(self, DM: DisNetManager, state: dict) -> dict:
+        """AddRemoteForce: add remote force from remote stress on nodes
+
+        """
+        print("CalRemoteStress: ReadRemoteStress")
+        # Check whether ABAQUS_stress_ready.flag exists
+        # if not wait for 250 ms and check again
+        # If stress ready, ready stress from file and evaluate remote force
+        #  (or read remote force directly from file?)
         return state
 
     def NodeForce(self, DM: DisNetManager, state: dict, pre_compute: bool=True) -> dict:

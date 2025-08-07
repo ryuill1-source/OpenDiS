@@ -17,8 +17,6 @@ from pydis.timeint.timeint_disnet import TimeIntegration
 from pydis.visualize.vis_disnet import VisualizeNetwork
 from framework.disnet_manager import DisNetManager
 
-from .remote_stress.cal_remote_stress import CalRemoteStress
-
 try:
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
