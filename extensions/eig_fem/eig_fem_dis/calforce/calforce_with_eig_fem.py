@@ -1,5 +1,5 @@
 """@package docstring
-CalImageForce: class for calculating forces on dislocation network
+CalForce: class for calculating forces on dislocation network
 
 Provide force calculation functions given a DisNet object
 """
@@ -12,6 +12,8 @@ from pydis.disnet import DisNet, Tag
 from framework.disnet_manager import DisNetManager
 from framework.calforce_base import CalForce_Base
 
+from .remote_stress.cal_remote_stress import CalRemoteStress
+
 class CalForce(CalForce_Base):
     """CalForce_DisNet: class for calculating forces on dislocation network
     """
@@ -19,11 +21,13 @@ class CalForce(CalForce_Base):
         self.calforce_bulk = calforce_bulk
         pass
 
-    def AddImageForce(self, DM: DisNetManager, state: dict) -> dict:
-        """AddImageForce: add image force from image stress on nodes
+    def AddRemoteForce(self, DM: DisNetManager, state: dict) -> dict:
+        """AddRemoteForce: add image force from image stress on nodes
 
         """
-        print("CalImageForce: AddImageForce")
+        print("CalForce: AddRemoteForce")
+        # Call CalRemoteStress.ReadRemoteStress(DM, state)
+        # Add remote force to dislocation nodes
         return state
 
     def NodeForce(self, DM: DisNetManager, state: dict, pre_compute: bool=True) -> dict:
@@ -31,7 +35,7 @@ class CalForce(CalForce_Base):
         """
         state = self.calforce_bulk.NodeForce(DM, state, pre_compute)
 
-        state = self.AddImageForce(DM, state)
+        state = self.AddRemoteForce(DM, state)
         return state
 
     def PreCompute(self, DM: DisNetManager, state: dict) -> dict:
@@ -44,5 +48,5 @@ class CalForce(CalForce_Base):
         """
         state = self.calforce_bulk.OneNodeForce(DM, state, tag, update_state)
 
-        #ToDo: Add Image force contribution to OneNodeForce
+        #ToDo: Add Remote force contribution to OneNodeForce
         return state

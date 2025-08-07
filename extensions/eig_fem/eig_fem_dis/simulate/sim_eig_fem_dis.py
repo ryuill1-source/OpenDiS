@@ -17,6 +17,8 @@ from pydis.timeint.timeint_disnet import TimeIntegration
 from pydis.visualize.vis_disnet import VisualizeNetwork
 from framework.disnet_manager import DisNetManager
 
+from .remote_stress.cal_remote_stress import CalRemoteStress
+
 try:
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
@@ -40,11 +42,20 @@ class SimulationDriver(SimulateNetwork):
         self.surface_mobility = surface_mobility
         self.surface_topology = surface_topology
 
+        # Launch abaqus
+        # or put at the beginning of test case
+
     def step_begin(self, DM: DisNetManager, state: dict):
         """step_begin: invoked at the begining of each time step
         """
         if self.image_stress is not None:
-            state = self.image_stress.CalImageStress(DM, state)
+            # skip first step
+            # starting from second step
+            # should call FEMRemotStress(DM, state)
+            # export eig strain increment (from previous step)
+            # remove ABAQUS_pause.flag
+            # call function in the remote_stress module
+            pass
 
     def step_integrate(self, DM: DisNetManager, state: dict):
         """step_integrate: invoked for time-integration at each time step
@@ -55,6 +66,8 @@ class SimulationDriver(SimulateNetwork):
         state = self.mobility.Mobility(DM, state)
         state = self.timeint.Update(DM, state)
         #self.plastic_strain(DM, state)
+        # calculate eigstrain field
+        # call function in the remote_stress module
 
     def step_topological_operations(self, DM: DisNetManager, state: dict):
         """step_topological_operations: invoked for handling topological events at each time step
@@ -75,3 +88,7 @@ class SimulationDriver(SimulateNetwork):
 
         if self.remesh is not None:
             self.remesh.Remesh(DM, state)
+
+    def my_new_function(self, DM: DisNetManager, state: dict):
+        print("my_new_function is called")
+        pass
