@@ -89,6 +89,32 @@ class SimulationDriver(SimulateNetwork):
         if self.remesh is not None:
             self.remesh.Remesh(DM, state)
 
-    def my_new_function(self, DM: DisNetManager, state: dict):
-        print("my_new_function is called")
-        pass
+    # (2025/08/07, Ill Ryu)
+    # For data communication, we need to keep the same dislocation network in plastic strain and rn_links
+    # It requires to write a files(Dis_Segs) after topology operations.
+    # Output format:
+    def write_Dis_Segs(self, DM: DisNetManager, filename_Dis_Segs):
+        """Write DisNetManager data to 'Dis_Segs' file
+           [Format] NodeID, NBBID, Node_old_position, NBR_old_position, Node_current_position, NBR_current_position, B, N
+        """
+        data = DM.export_data()
+        data['version'] = '1.0'
+        data['nodes_attr'] = ['domain', 'index', 'x', 'y', 'z', 'constraint']
+        data['segs_attr'] = ['node1', 'node2', 'bx', 'by', 'bz', 'nx', 'ny', 'nz']
+
+
+    def step_write_files(self, DM: DisNetManager, state: dict):
+        if self.write_freq != None:
+            istep = state['istep']
+            if istep % self.write_freq == 0:
+                DM.write_json(os.path.join(self.write_dir, f'disnet_{istep}.json'))
+                if self.save_state:
+                    with open(os.path.join(self.write_dir, f'state_{istep}.pickle'), 'wb') as file:
+                        pickle.dump(state, file)
+            # Here we call a new function to print out the data to Dis_Segs
+            self.write_Dis_Segs(os.path.join(self.write_dir, f'Dis_Segs_{istep}'))  # create with the step number
+
+    #def my_function(self, DM: DisNetManager, state: dict):
+    #    print("my_new_function is called")
+    #    pass
+
