@@ -92,16 +92,59 @@ class SimulationDriver(SimulateNetwork):
     # (2025/08/07, Ill Ryu)
     # For data communication, we need to keep the same dislocation network in plastic strain and rn_links
     # It requires to write a files(Dis_Segs) after topology operations.
-    # Output format:
-    def write_Dis_Segs(self, DM: DisNetManager, filename_Dis_Segs):
+    # We are waiting for the update which could export old_position of nodes.
+    def write_Dis_Segs(self, DM: DisNetManager, filename_Dis_Segs: str):
         """Write DisNetManager data to 'Dis_Segs' file
            [Format] NodeID, NBBID, Node_old_position, NBR_old_position, Node_current_position, NBR_current_position, B, N
         """
-        data = DM.export_data()
-        data['version'] = '1.0'
-        data['nodes_attr'] = ['domain', 'index', 'x', 'y', 'z', 'constraint']
-        data['segs_attr'] = ['node1', 'node2', 'bx', 'by', 'bz', 'nx', 'ny', 'nz']
+        # This is copied from disnet.py (get_segs_data_with_positions)
+        G = DM.get_disnet(DisNet)
+        _, ntags = G.get_nodes_data()
+        Nseg = G.num_segments()
+        nodeids = np.zeros((Nseg, 2), dtype=int)
+        tag1 = np.zeros((Nseg, 2), dtype=int)
+        tag2 = np.zeros((Nseg, 2), dtype=int)
+        burgers = np.zeros((Nseg, 3))
+        planes = np.zeros((Nseg, 3))
+        R1 = np.zeros((Nseg, 3))
+        R2 = np.zeros((Nseg, 3))
+        i = 0
+        for (source, target), edge_attr in G.all_segments_dict().items():
+            nodeids[i,:] = ntags[source], ntags[target]
+            tag1[i,:] = source
+            tag2[i,:] = target
+            burgers[i,:] = edge_attr.burg_vec_from(source).copy()
+            planes[i,:] = getattr(edge_attr, "plane_normal", np.zeros(3)).copy()
+            r1_local = G.nodes(source).R
+            r2_local = G.nodes(target).R
+            # apply PBC
+            r2_local = G.cell.closest_image(Rref=r1_local, R=r2_local)
+            R1[i,:] = r1_local
+            R2[i,:] = r2_local
+            i += 1
 
+        with open(filename_Dis_Segs, "w") as file:
+            for i in range(Nseg):
+                file.write("%d %d %e %e %e %e %e %e\n"%(nodeids[i,0], nodeids[i,1],
+                            R1[i,0], R1[i,1], R1[i,2],
+                            R2[i,0], R2[i,1], R2[i,2]))
+
+
+    def read_Dis_Segs(self, filename_Dis_Segs: str):
+        """read from 'Dis_Segs' file
+        """
+        # This is copied from disnet.py (get_segs_data_with_positions)
+        data = np.loadtxt(filename_Dis_Segs, delimiter=' ', dtype=float)
+
+        return data
+
+    def change_surface_node_flag(self, DM: DisNetManager, state: dict):
+        """ Change the flag of node outside the FEM domain
+        """
+        G = DM.get_disnet(DisNet)
+        node1 = G.nodes((0,0))
+        node1.constraint = 6 
+        return state
 
     def step_write_files(self, DM: DisNetManager, state: dict):
         if self.write_freq != None:
@@ -112,7 +155,7 @@ class SimulationDriver(SimulateNetwork):
                     with open(os.path.join(self.write_dir, f'state_{istep}.pickle'), 'wb') as file:
                         pickle.dump(state, file)
             # Here we call a new function to print out the data to Dis_Segs
-            self.write_Dis_Segs(os.path.join(self.write_dir, f'Dis_Segs_{istep}'))  # create with the step number
+            #self.write_Dis_Segs(os.path.join(self.write_dir, f'Dis_Segs_{istep}'))  # create with the step number
 
     #def my_function(self, DM: DisNetManager, state: dict):
     #    print("my_new_function is called")

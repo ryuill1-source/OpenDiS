@@ -8,6 +8,7 @@ pydis_paths = ['../../../../python', '../../../../lib', '../../../../core/pydis/
 [sys.path.append(os.path.abspath(path)) for path in pydis_paths if not path in sys.path]
 
 import numpy as np
+from typing import Tuple
 from pydis.disnet import DisNet, Tag
 from framework.disnet_manager import DisNetManager
 from framework.calforce_base import CalForce_Base
@@ -21,6 +22,7 @@ class CalForce(CalForce_Base):
 
     def AddRemoteForce(self, DM: DisNetManager, state: dict) -> dict:
         """AddRemoteForce: add image force from image stress on nodes
+           We could use 'userstress' module by Kyeongmi
 
         """
         print("CalForce: AddRemoteForce")
@@ -76,3 +78,12 @@ class CalForce(CalForce_Base):
 
         #ToDo: Add Remote force contribution to OneNodeForce
         return state
+    
+
+    def NodeForce_Elasticity_SBA_Cutoff(self, G: DisNet, applied_stress: np.ndarray) -> Tuple[dict, dict]:
+        """ It is copied from NodeForce_Elasticity_SBA(calforce_disnet.py)
+            We want to compute the elastic interation within cutoff.
+            Neighbour list needs to be useful (pydis/nbrlist)
+        """
+        return ({},{})
+
