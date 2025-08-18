@@ -30,14 +30,15 @@ class SimulationDriver(SimulateNetwork):
     """SimulationDriver: class for simulating dislocation network with boundary value problem (BVP)
            extends SimulateNetwork from PyDiS
     """
+# (08/14/2025, kyeongmi) Add arguments remote_stress, remote_force
     def __init__(self, state: dict,
-                 #image_stress=None, image_force=None,
+                 remote_stress=None, remote_force=None,
                  surface_mobility=None, surface_topology=None,
                  **kwargs) -> None:
         super().__init__(state, **kwargs)
 
-        #self.image_stress = image_stress
-        #self.image_force = image_force
+        self.remote_stress = remote_stress
+        self.remote_force = remote_force
         self.surface_mobility = surface_mobility
         self.surface_topology = surface_topology
 
@@ -46,15 +47,20 @@ class SimulationDriver(SimulateNetwork):
 
     def step_begin(self, DM: DisNetManager, state: dict):
         """step_begin: invoked at the begining of each time step
+           (08/14/2025, kyeongmi) skip the first step and call FEMRemoteStress,
+                                  which gets eigenstrain field from OpenDiS and
+                                  runs ABAQUS to calculate stress field. 
         """
-        #if self.image_stress is not None:
-            # skip first step
-            # starting from second step
+        if self.remote_stress != None:
+            istep = state['istep']
+            if istep == 0: # skip the first step
+                pass
+            else: # starting from second step
             # should call FEMRemotStress(DM, state)
             # export eig strain increment (from previous step)
             # remove ABAQUS_pause.flag
             # call function in the remote_stress module
-        self.calforce.CalRemoteStress(DM, state)
+                self.calforce.FEMRemoteStress(DM, state)
         pass
 
     def step_integrate(self, DM: DisNetManager, state: dict):

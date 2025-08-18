@@ -13,7 +13,7 @@ from pydis import Collision, Remesh, VisualizeNetwork
 from eig_fem_dis import SimulationDriver, CalForce, Surface_Topology
 from eig_fem_dis import CalForce as CalForce_withSurface, MobilityLaw as MobilityLaw_withSurface
 
-from eig_fem_dis import run_abaqus
+from eig_fem_dis import run_abaqus, DDM_codes
 
 def init_frank_read_src_loop(arm_length=1.0, box_length=8.0, burg_vec=np.array([1.0,0.0,0.0]), pbc=False):
     '''Generate an initial Frank-Read source configuration
@@ -46,7 +46,7 @@ def main():
 
     vis = VisualizeNetwork()
 
-    state = {"burgmag": 3e-10, "mu": 50e9, "nu": 0.3, "a": 1.0, "maxseg": 0.04*Lbox, "minseg": 0.01*Lbox, "rann": 3.0, "mob": 1.0}
+    state.update({"burgmag": 3e-10, "mu": 50e9, "nu": 0.3, "a": 1.0, "maxseg": 0.04*Lbox, "minseg": 0.01*Lbox, "rann": 3.0, "mob": 1.0})
 
     calforce_bulk  = CalForce_Bulk(force_mode='LineTension', state=state)
     mobility_bulk  = MobilityLaw_Bulk(mobility_law='SimpleGlide', state=state)
@@ -54,7 +54,11 @@ def main():
     collision = Collision(collision_mode='Proximity', state=state, nbrlist=nbrlist)
     remesh    = Remesh(remesh_rule='LengthBased', state=state)
 
-    #remote_stress = CalRemoteStress(state=state)
+    # (08/14/2025, kyeongmi) import DDM_codes as remote_stress
+    # Put keys and values for DDM simulation in the state dictionary (originally in the config dictionary)
+    state.update({"foldername_ABAQUS": 'ABAQUS'})
+
+    remote_stress = DDM_codes(state)
     calforce = CalForce_withSurface(state=state, calforce_bulk=calforce_bulk)
     mobility = MobilityLaw_withSurface(state=state, mobility_bulk=mobility_bulk)
 
@@ -64,20 +68,22 @@ def main():
 
     sim = SimulationDriver(calforce=calforce, mobility=mobility, timeint=timeint,
                           topology=topology, collision=collision, remesh=remesh, vis=vis,
-                          #remote_stress=remote_stress,
+                          remote_stress=remote_stress,
                           surface_topology=surface_topology,
-                          state=state, max_step=5, loading_mode="stress",
+                          state=state, max_step=2, loading_mode="stress",
                           applied_stress=np.array([0.0, 0.0, 0.0, 0.0, -4.0e8, 0.0]),
-                          print_freq=10, plot_freq=10, plot_pause_seconds=0.01,
-                          write_freq=10, write_dir='output', save_state=False)
+                          print_freq=1, plot_freq=1, plot_pause_seconds=0.01,
+                          write_freq=1, write_dir='output', save_state=False)
     sim.run(net, state)
 
     return net.is_sane()
 
 
 if __name__ == "__main__":
+    
+    # (08/14/2025, kyeongmi) Put keys and values for DDM simulation in the state dictionary (originally in the config dictionary)
     # ABAQUS input file and user subroutine file should be placed in foldername_ABAQUS
-    config = {
+    state = {
             "jobname_head": '',
             "ABAQUS_input_filename": 'test_eig_fem_elastic_VUMAT_control',
             "num_cpus": 1,
@@ -87,7 +93,7 @@ if __name__ == "__main__":
         }
 
     # Initiate ABAQUS run, ABAQUS starts and waits until "ABAQUS_running" flag is shown.
-    run_abaqus(config)
+    run_abaqus(state)
 
     main()
 

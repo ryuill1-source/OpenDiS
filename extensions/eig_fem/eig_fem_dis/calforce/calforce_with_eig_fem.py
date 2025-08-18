@@ -18,7 +18,6 @@ class CalForce(CalForce_Base):
     """
     def __init__(self, state: dict={}, calforce_bulk=None) -> None:
         self.calforce_bulk = calforce_bulk
-        pass
 
     def AddRemoteForce(self, DM: DisNetManager, state: dict) -> dict:
         """AddRemoteForce: add image force from image stress on nodes
@@ -35,22 +34,35 @@ class CalForce(CalForce_Base):
         print("CalForce: CalEigstrainField")
         return state
 
-    def CalRemoteStress(self, DM: DisNetManager, state: dict) -> dict:
+    def FEMRemoteStress(self, DM: DisNetManager, state: dict) -> dict:
         """AddRemoteForce: add remote force from remote stress on nodes
 
         """
-        print("CalForce: CalRemoteStress")
-        state = self.CalEigstrainField(DM, state)
         # export eig strain increment (from previous step)
-        print("  remove ABAQUS_pause.flag file")
-        # remove ABAQUS_pause.flag
+        print("CalForce: FEMRemoteStress")
+        state = self.CalEigstrainField(DM, state)
+       
+        # (08/14/2025, kyeongmi) remove ABAQUS_pause.flag
+        foldername_ABAQUS = state.get("foldername_ABAQUS")
+        
+        ABAQUS_pause = f"{foldername_ABAQUS}/ABAQUS_pause.flag"
+
+        if os.path.exists(ABAQUS_pause):
+            os.remove(ABAQUS_pause)
+            print(f"remove {ABAQUS_pause} file")
+        else:
+            print(f"{ABAQUS_pause} does not exist")    
+
+        # (08/14/2025, kyeongmi) since ABAQUS_pause.flag is removed, ABAQUS will start the calculation of stress field (should be modified)
+        print("ABAQUS starts the stress calculation ..")
+        
         return state
 
     def ReadRemoteStress(self, DM: DisNetManager, state: dict) -> dict:
         """AddRemoteForce: add remote force from remote stress on nodes
 
         """
-        print("CalRemoteStress: ReadRemoteStress")
+        print("FEMRemoteStress: ReadRemoteStress")
         print("  check whether ABAQUS_stress_ready.flag file exists")
         # Check whether ABAQUS_stress_ready.flag exists
         # if not wait for 250 ms and check again

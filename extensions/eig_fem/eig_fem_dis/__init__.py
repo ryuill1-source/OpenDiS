@@ -5,3 +5,4 @@ from .calforce.calforce_with_eig_fem import CalForce
 from .mobility.mobility_with_surface import MobilityLaw
 from .surface_topology.surface_topology import Surface_Topology
 from .abaqus.run_abaqus import run_abaqus
+from .abaqus.DDM_codes import DDM_codes
