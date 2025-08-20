@@ -46,6 +46,8 @@ def main():
 
     vis = VisualizeNetwork()
 
+    # (08/14/2025, kyeongmi) Since state dictionary has already been defined for ABAQUS initiation,
+    #                        one should "update" the state dict. (DO NOT overwrite it) 
     state.update({"burgmag": 3e-10, "mu": 50e9, "nu": 0.3, "a": 1.0, "maxseg": 0.04*Lbox, "minseg": 0.01*Lbox, "rann": 3.0, "mob": 1.0})
 
     calforce_bulk  = CalForce_Bulk(force_mode='LineTension', state=state)
@@ -58,7 +60,7 @@ def main():
     # Put keys and values for DDM simulation in the state dictionary (originally in the config dictionary)
     state.update({"foldername_ABAQUS": 'ABAQUS'})
 
-    remote_stress = DDM_codes(state)
+    remote_stress = DDM_codes(state=state)
     calforce = CalForce_withSurface(state=state, calforce_bulk=calforce_bulk)
     mobility = MobilityLaw_withSurface(state=state, mobility_bulk=mobility_bulk)
 

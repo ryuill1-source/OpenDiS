@@ -9,16 +9,18 @@
 
       include 'vaba_param.inc'
 	!IMPLICIT DOUBLE PRECISION (a-h,o-z)
-	CHARACTER(*), PARAMETER :: filename_ABAQUS_flag = "ABAQUSrunning"
+	CHARACTER(*), PARAMETER :: filename_ABAQUS_stress_ready_flag = "ABAQUS_stress_ready"
+	CHARACTER(*), PARAMETER :: filename_ABAQUS_pause_flag = "ABAQUS_pause"
+      CHARACTER(*), PARAMETER :: filename_ABAQUS_running_flag = "ABAQUS_running"
       
 C     [CAUTION] foldername should be ABSOLUTE PATH !!!!
       CHARACTER(*), PARAMETER :: foldername = "/home/kyeongmi/Codes/OpenDiS.eig_fem.git/tests/test21_eig_fem_cylinder/ABAQUS"
-	
+      
       CHARACTER(*), PARAMETER :: filename_flag = ""
-      CHARACTER(LEN=200) :: full_filename	
-      INTEGER :: MATLABWORKING = 10
-	
-      LOGICAL FILEEXISTANCE
+      CHARACTER(LEN=256) :: full_filename_pause
+      CHARACTER(LEN=256) :: full_filename_stress_ready
+      CHARACTER(LEN=256) :: full_filename_running
+      LOGICAL :: FILEEXISTANCE
 
 C     Elastic material model only
 
@@ -64,24 +66,40 @@ C       Copy state variables unchanged
 
       end do
 
-C  Control ABAQUS run (pause&go)  ***********************************V   
-C  The following needs to be placed in vexternalDB
-	DO WHILE (MATLABWORKING>0)
-		full_filename = TRIM(foldername)//"/"//filename_ABAQUS_flag//TRIM(filename_flag)//".flag"
-            PRINT *, "Checking for file: ", TRIM(full_filename)
 
-            INQUIRE (FILE=full_filename, EXIST=FILEEXISTANCE)
+C  The following needs to be placed in vexternalDB
+C  Remove ABAQUS_running.flag & Making ABAQUS_pause.flag, ABAQUS_stress_ready.flag *********************
+      full_filename_running = TRIM(foldername)//"/"//filename_ABAQUS_running_flag//TRIM(filename_flag)//".flag"
+      OPEN(UNIT=97, FILE=TRIM(full_filename_running), STATUS="REPLACE", ACTION="WRITE")
+      CLOSE(97, STATUS="DELETE")
+      PRINT *, "VUMAT deleted empty file: ", TRIM(filename_ABAQUS_running_flag)
+
+      full_filename_stress_ready = TRIM(foldername)//"/"//filename_ABAQUS_stress_ready_flag//TRIM(filename_flag)//".flag"
+      OPEN(UNIT=98, FILE=TRIM(full_filename_stress_ready), STATUS="REPLACE", ACTION="WRITE")
+      CLOSE(98)
+      PRINT *, "VUMAT made empty file: ", TRIM(filename_ABAQUS_stress_ready_flag)
+      
+      full_filename_pause = TRIM(foldername)//"/"//filename_ABAQUS_pause_flag//TRIM(filename_flag)//".flag"
+      OPEN(UNIT=99, FILE=TRIM(full_filename_pause), STATUS="REPLACE", ACTION="WRITE")
+      CLOSE(99)
+      PRINT *, "VUMAT made empty file: ", TRIM(filename_ABAQUS_pause_flag)
+C  *************************************************************************
+
+C  Control ABAQUS run (pause&go)  ***********************************  
+	DO WHILE (.TRUE.)
+            PRINT *, "Checking for file: ", TRIM(filename_ABAQUS_pause_flag)
+
+            INQUIRE (FILE=full_filename_pause, EXIST=FILEEXISTANCE)
 		
             IF(FILEEXISTANCE) THEN
-                  PRINT *, "FILEEXISTANCE"
-		      !CALL SLEEPQQ(10000)
-		      MATLABWORKING=0
+                  PRINT *, "ABAQUS_pause.flag exists"
+		      CALL SLEEPQQ(1000)
             ELSE
-                  PRINT *, "Not FILEEXISTANCE"
-			MATLABWORKING=0
+                  PRINT *, "ABAQUS_pause.flag NOT exists, keep calculation"
+			EXIT
             END IF
 	END DO
-C  End of Control ABAQUS run (pause&go)  ***********************************V   
- 
+C  End of Control ABAQUS run (pause&go)  *********************************** 
+
       return
       end

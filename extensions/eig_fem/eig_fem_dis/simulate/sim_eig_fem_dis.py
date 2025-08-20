@@ -51,6 +51,7 @@ class SimulationDriver(SimulateNetwork):
                                   which gets eigenstrain field from OpenDiS and
                                   runs ABAQUS to calculate stress field. 
         """
+        print("------step_begin-------")
         if self.remote_stress != None:
             istep = state['istep']
             if istep == 0: # skip the first step
@@ -68,6 +69,7 @@ class SimulationDriver(SimulateNetwork):
         """
         #self.save_old_nodes(DM, state)
 
+        print("------step_integrate-------")
         state = self.calforce.NodeForce(DM, state)
         state = self.mobility.Mobility(DM, state)
         state = self.timeint.Update(DM, state)
@@ -78,6 +80,7 @@ class SimulationDriver(SimulateNetwork):
     def step_topological_operations(self, DM: DisNetManager, state: dict):
         """step_topological_operations: invoked for handling topological events at each time step
         """
+        print("------step_topological_operations-------")
         if self.cross_slip is not None:
             self.cross_slip.Handle(DM, state)
 
@@ -114,6 +117,11 @@ class SimulationDriver(SimulateNetwork):
         planes = np.zeros((Nseg, 3))
         R1 = np.zeros((Nseg, 3))
         R2 = np.zeros((Nseg, 3))
+
+        R1_old = np.zeros((Nseg, 3))
+        R2_old = np.zeros((Nseg, 3))
+        dyad_flat = np.zeros((Nseg, 9))
+
         i = 0
         for (source, target), edge_attr in G.all_segments_dict().items():
             nodeids[i,:] = ntags[source], ntags[target]
@@ -127,14 +135,49 @@ class SimulationDriver(SimulateNetwork):
             r2_local = G.cell.closest_image(Rref=r1_local, R=r2_local)
             R1[i,:] = r1_local
             R2[i,:] = r2_local
-            i += 1
+            
+            # (08/19/2025, kyeongmi) For testing, I assumed the old position as the current position shifted by -b
+            R1_old[i,:] = R1[i,:] - burgers[i,:]
+            R2_old[i,:] = R2[i,:] - burgers[i,:]
 
+            dyad = np.outer(planes[i,:], burgers[i,:])
+            dyad_flat[i,:] = dyad.ravel()
+
+            i += 1
+        '''
         with open(filename_Dis_Segs, "w") as file:
             for i in range(Nseg):
                 file.write("%d %d %e %e %e %e %e %e\n"%(nodeids[i,0], nodeids[i,1],
                             R1[i,0], R1[i,1], R1[i,2],
                             R2[i,0], R2[i,1], R2[i,2]))
-
+        '''
+        '''
+        with open(filename_Dis_Segs, "w") as file:
+            for i in range(Nseg):
+                file.write("%d %d %e %e %e %e %e %e %e %e %e %e %e %e %e %e %e %e %e %e %e %e %e\n"
+                            %(nodeids[i,0], nodeids[i,1],
+                            R1[i,0], R1[i,1], R1[i,2], R2[i,0], R2[i,1], R2[i,2],
+                            R1_old[i,0], R1_old[i,1], R1_old[i,2], R2_old[i,0], R2_old[i,1], R2_old[i,2],
+                            dyad_flat[i,0], dyad_flat[i,1], dyad_flat[i,2],
+                            dyad_flat[i,3], dyad_flat[i,4], dyad_flat[i,5],
+                            dyad_flat[i,6], dyad_flat[i,7], dyad_flat[i,8]))
+        '''
+        # (08/19/2025, kyeongmi) Write Dis_Segs file with desired format
+        with open(filename_Dis_Segs, "w") as file:
+            for i in range(Nseg):
+                values = [
+                    nodeids[i,0], nodeids[i,1],
+                    R1[i,0], R1[i,1], R1[i,2],
+                    R2[i,0], R2[i,1], R2[i,2],
+                    R1_old[i,0], R1_old[i,1], R1_old[i,2],
+                    R2_old[i,0], R2_old[i,1], R2_old[i,2],
+                    *dyad_flat[i,:]   # 9 elements
+                ]
+                file.write(
+                    f"{values[0]:d} {values[1]:d} " + 
+                    " ".join(f"{v:.6e}" for v in values[2:]) + "\n"
+                )
+        print("Dis_Segs file has been written")
 
     def read_Dis_Segs(self, filename_Dis_Segs: str):
         """read from 'Dis_Segs' file
@@ -153,6 +196,7 @@ class SimulationDriver(SimulateNetwork):
         return state
 
     def step_write_files(self, DM: DisNetManager, state: dict):
+        print("------step_write_files-------")
         if self.write_freq != None:
             istep = state['istep']
             if istep % self.write_freq == 0:
@@ -161,7 +205,7 @@ class SimulationDriver(SimulateNetwork):
                     with open(os.path.join(self.write_dir, f'state_{istep}.pickle'), 'wb') as file:
                         pickle.dump(state, file)
             # Here we call a new function to print out the data to Dis_Segs
-            #self.write_Dis_Segs(os.path.join(self.write_dir, f'Dis_Segs_{istep}'))  # create with the step number
+            self.write_Dis_Segs(DM, os.path.join(self.write_dir, f'Dis_Segs_{istep}'))  # create with the step number
 
     #def my_function(self, DM: DisNetManager, state: dict):
     #    print("my_new_function is called")
