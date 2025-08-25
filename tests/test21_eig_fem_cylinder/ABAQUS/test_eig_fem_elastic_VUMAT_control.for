@@ -1,57 +1,45 @@
-      subroutine vumat(
-     1  nblock, ndir, nshr, nstatev, nfieldv, nprops, lanneal,
-     2  stepTime, totalTime, dt, cmname, coordMp, charLength,
-     3  props, density, strainInc, relSpinInc,
-     4  tempOld, stretchOld, defgradOld, fieldOld,
-     5  stressOld, stateOld, enerInternOld, enerInelasOld,
-     6  tempNew, stretchNew, defgradNew, fieldNew,
-     7  stressNew, stateNew, enerInternNew, enerInelasNew )
+!DIR$ FREEFORM
+subroutine vumat(&
+    nblock, ndir, nshr, nstatev, nfieldv, nprops, lanneal, &
+    stepTime, totalTime, dt, cmname, coordMp, charLength, &
+    props, density, strainInc, relSpinInc, &
+    tempOld, stretchOld, defgradOld, fieldOld, &
+    stressOld, stateOld, enerInternOld, enerInelasOld, &
+    tempNew, stretchNew, defgradNew, fieldNew, &
+    stressNew, stateNew, enerInternNew, enerInelasNew)
 
-      include 'vaba_param.inc'
-	!IMPLICIT DOUBLE PRECISION (a-h,o-z)
-	CHARACTER(*), PARAMETER :: filename_ABAQUS_stress_ready_flag = "ABAQUS_stress_ready"
-	CHARACTER(*), PARAMETER :: filename_ABAQUS_pause_flag = "ABAQUS_pause"
-      CHARACTER(*), PARAMETER :: filename_ABAQUS_running_flag = "ABAQUS_running"
+    include 'vaba_param.inc'
+    !IMPLICIT DOUBLE PRECISION (a-h,o-z)
       
-C     [CAUTION] foldername should be ABSOLUTE PATH !!!!
-      CHARACTER(*), PARAMETER :: foldername = "/home/kyeongmi/Codes/OpenDiS.eig_fem.git/tests/test21_eig_fem_cylinder/ABAQUS"
-      
-      CHARACTER(*), PARAMETER :: filename_flag = ""
-      CHARACTER(LEN=256) :: full_filename_pause
-      CHARACTER(LEN=256) :: full_filename_stress_ready
-      CHARACTER(LEN=256) :: full_filename_running
-      LOGICAL :: FILEEXISTANCE
+    !Elastic material model only
 
-C     Elastic material model only
+    dimension props(nprops), density(nblock), &
+        coordMp(nblock,*), charLength(*), strainInc(nblock,ndir+nshr), &
+        relSpinInc(*), tempOld(*), stretchOld(*), defgradOld(*), &
+        fieldOld(*), stressOld(nblock,ndir+nshr), &
+        stateOld(nblock,nstatev), enerInternOld(nblock), &
+        enerInelasOld(nblock), tempNew(*), stretchNew(*), &
+        defgradNew(*), fieldNew(*), stressNew(nblock,ndir+nshr), &
+        stateNew(nblock,nstatev), enerInternNew(nblock), &
+        enerInelasNew(nblock)
 
-      dimension props(nprops), density(nblock),
-     1  coordMp(nblock,*), charLength(*), strainInc(nblock,ndir+nshr),
-     2  relSpinInc(*), tempOld(*), stretchOld(*), defgradOld(*),
-     3  fieldOld(*), stressOld(nblock,ndir+nshr),
-     4  stateOld(nblock,nstatev), enerInternOld(nblock),
-     5  enerInelasOld(nblock), tempNew(*), stretchNew(*),
-     6  defgradNew(*), fieldNew(*), stressNew(nblock,ndir+nshr),
-     7  stateNew(nblock,nstatev), enerInternNew(nblock),
-     8  enerInelasNew(nblock)
+    character*80 cmname
+    parameter (zero=0.0d0, one=1.0d0)
 
-      character*80 cmname
+    !Read properties: Young's modulus and Poisson's ratio
+    E = props(1)
+    NU = props(2)
 
-      parameter (zero=0.0d0, one=1.0d0)
+    !Compute Lame constants
+    G = E / (2.0d0 * (1.0d0 + NU))
+    LAMBDA = E * NU / ((1.0d0 + NU)*(1.0d0 - 2.0d0 * NU))
 
-C     Read properties: Young's modulus and Poisson's ratio
-      E = props(1)
-      NU = props(2)
+    do i = 1, nblock
 
-C     Compute Lame constants
-      G = E / (2.0d0 * (1.0d0 + NU))
-      LAMBDA = E * NU / ((1.0d0 + NU)*(1.0d0 - 2.0d0 * NU))
-
-      do i = 1, nblock
-
-C       Compute strain trace (volumetric strain)
+        !Compute strain trace (volumetric strain)
         trace_eps = strainInc(i,1) + strainInc(i,2) + strainInc(i,3)
 
-C       Compute stress update: sigma = sigma_old + lambda*trace*I + 2G*eps
+        !Compute stress update: sigma = sigma_old + lambda*trace*I + 2G*eps
         stressNew(i,1) = stressOld(i,1) + LAMBDA*trace_eps + 2.0d0*G*strainInc(i,1)
         stressNew(i,2) = stressOld(i,2) + LAMBDA*trace_eps + 2.0d0*G*strainInc(i,2)
         stressNew(i,3) = stressOld(i,3) + LAMBDA*trace_eps + 2.0d0*G*strainInc(i,3)
@@ -59,47 +47,147 @@ C       Compute stress update: sigma = sigma_old + lambda*trace*I + 2G*eps
         if (nshr .ge. 2) stressNew(i,5) = stressOld(i,5) + 2.0d0 * G * strainInc(i,5)
         if (nshr .ge. 3) stressNew(i,6) = stressOld(i,6) + 2.0d0 * G * strainInc(i,6)
 
-C       Copy state variables unchanged
+        !Copy state variables unchanged
         do j = 1, nstatev
-          stateNew(i,j) = stateOld(i,j)
+            stateNew(i,j) = stateOld(i,j)
         end do
+    end do
 
-      end do
+    return
+end subroutine vumat
 
+subroutine vexternaldb(lOp, i_Array, niArray, r_Array, nrArray)
+    USE IFPORT
+    IMPLICIT NONE
+    INTEGER            :: lOp, niArray, nrArray
+    INTEGER            :: i_Array(niArray)
+    DOUBLE PRECISION   :: r_Array(nrArray)
+    LOGICAL            :: FILEEXISTANCE
+    INTEGER            :: kInc
+!  i_Array index map
+    INTEGER, PARAMETER :: i_int_nTotalNodes    = 1
+    INTEGER, PARAMETER :: i_int_nTotalElements = 2
+    INTEGER, PARAMETER :: i_int_kStep          = 3
+    INTEGER, PARAMETER :: i_int_kInc           = 4
+    INTEGER, PARAMETER :: i_int_iStatus        = 5
+    INTEGER, PARAMETER :: i_int_lWriteRestart  = 6
+!  lOp codes
+    INTEGER, PARAMETER :: j_int_StartAnalysis  = 0
+    INTEGER, PARAMETER :: j_int_StartStep      = 1
+    INTEGER, PARAMETER :: j_int_SetupIncrement = 2
+    INTEGER, PARAMETER :: j_int_StartIncrement = 3
+    INTEGER, PARAMETER :: j_int_EndIncrement   = 4
+    INTEGER, PARAMETER :: j_int_EndStep        = 5
+    INTEGER, PARAMETER :: j_int_EndAnalysis    = 6
+!  r_Array indices
+    INTEGER, PARAMETER :: i_flt_TotalTime=1, i_flt_StepTime=2, i_flt_dTime=3
+!  flag
+	CHARACTER(*), PARAMETER :: f_stress_ready_flag = "ABAQUS_stress_ready"
+	CHARACTER(*), PARAMETER :: f_pause_flag = "ABAQUS_pause"
+    CHARACTER(*), PARAMETER :: f_running_flag = "ABAQUS_running"
+!   [CAUTION] foldername should be ABSOLUTE PATH !!!!
+    CHARACTER(*), PARAMETER :: foldername = "/home/kyeongmi/Codes/OpenDiS.eig_fem.git/tests/test21_eig_fem_cylinder/ABAQUS"
+    CHARACTER(*), PARAMETER :: f_flag = ""
+    CHARACTER(LEN=256) :: full_f_pause
+    CHARACTER(LEN=256) :: full_f_stress_ready
+    CHARACTER(LEN=256) :: full_f_running
 
-C  The following needs to be placed in vexternalDB
-C  Remove ABAQUS_running.flag & Making ABAQUS_pause.flag, ABAQUS_stress_ready.flag *********************
-      full_filename_running = TRIM(foldername)//"/"//filename_ABAQUS_running_flag//TRIM(filename_flag)//".flag"
-      OPEN(UNIT=97, FILE=TRIM(full_filename_running), STATUS="REPLACE", ACTION="WRITE")
-      CLOSE(97, STATUS="DELETE")
-      PRINT *, "VUMAT deleted empty file: ", TRIM(filename_ABAQUS_running_flag)
+    full_f_pause = TRIM(foldername)//"/"//TRIM(f_pause_flag)//TRIM(f_flag)//".flag"
+    full_f_stress_ready = TRIM(foldername)//"/"//TRIM(f_stress_ready_flag)//TRIM(f_flag)//".flag"
+    full_f_running = TRIM(foldername)//"/"//TRIM(f_running_flag)//TRIM(f_flag)//".flag"
+    
+    SELECT CASE (lOp)
+    
+    CASE (j_int_EndIncrement)
+        PRINT *, "EndInc: kInc=", i_Array(i_int_kInc), &
+           " StepTime=", r_Array(i_flt_StepTime), " dt=", r_Array(i_flt_dTime)
+        ! Check the step number
+        kInc = i_Array(i_int_kInc)
+        IF (kInc == 1) THEN
+        ! remove ABAQUS_running.flag & write ABAQUS_pause.flag only
+            PRINT *, "[EndStep] kInc = 1. write ABAQUS_PAUSE.flag only"
+            
+            OPEN(UNIT=97, FILE=TRIM(full_f_running), STATUS="REPLACE", ACTION="WRITE")
+            CLOSE(97, STATUS="DELETE")
+            PRINT *, "VEXTXERNALDB deleted empty file: ", TRIM(f_running_flag)
+            
+            OPEN(UNIT=99, FILE=TRIM(full_f_pause), STATUS="REPLACE", ACTION="WRITE")
+            CLOSE(99)
+            PRINT *, "VEXTERNALDB made empty file: ", TRIM(f_pause_flag)
+            
+            DO WHILE (.TRUE.)
+                PRINT *, "Checking for file: ", TRIM(f_pause_flag)
 
-      full_filename_stress_ready = TRIM(foldername)//"/"//filename_ABAQUS_stress_ready_flag//TRIM(filename_flag)//".flag"
-      OPEN(UNIT=98, FILE=TRIM(full_filename_stress_ready), STATUS="REPLACE", ACTION="WRITE")
-      CLOSE(98)
-      PRINT *, "VUMAT made empty file: ", TRIM(filename_ABAQUS_stress_ready_flag)
-      
-      full_filename_pause = TRIM(foldername)//"/"//filename_ABAQUS_pause_flag//TRIM(filename_flag)//".flag"
-      OPEN(UNIT=99, FILE=TRIM(full_filename_pause), STATUS="REPLACE", ACTION="WRITE")
-      CLOSE(99)
-      PRINT *, "VUMAT made empty file: ", TRIM(filename_ABAQUS_pause_flag)
-C  *************************************************************************
+                INQUIRE (FILE=full_f_pause, EXIST=FILEEXISTANCE)
+            
+                IF(FILEEXISTANCE) THEN
+                    PRINT *, "ABAQUS_pause.flag exists"
+                    CALL SLEEPQQ(1000)
+                ELSE
+                    PRINT *, "ABAQUS_pause.flag NOT exists, keep calculation"
+                    EXIT
+                END IF
+            END DO
+        ELSE
+        ! remove ABAQUS_running.flag & write ABAQUS_pause.flag, ABAQUS_stress_ready.flag
+            PRINT *, "[EndStep] kInc = ", kInc, ". write ABAQUS_PAUSE.flag and ABAQUS_stress_ready.flag"
+            
+            OPEN(UNIT=97, FILE=TRIM(full_f_running), STATUS="REPLACE", ACTION="WRITE")
+            CLOSE(97, STATUS="DELETE")
+            PRINT *, "VEXTERNALDB deleted empty file: ", TRIM(f_running_flag)
+            
+            OPEN(UNIT=99, FILE=TRIM(full_f_pause), STATUS="REPLACE", ACTION="WRITE")
+            CLOSE(99)
+            PRINT *, "VEXTERNALDB made empty file: ", TRIM(f_pause_flag)
+     
+            OPEN(UNIT=99, FILE=TRIM(full_f_stress_ready), STATUS="REPLACE", ACTION="WRITE")
+            CLOSE(99)
+            PRINT *, "VEXTERNALDB made empty file: ", TRIM(f_stress_ready_flag)    
+            
+            DO WHILE (.TRUE.)
+                PRINT *, "Checking for file: ", TRIM(f_pause_flag)
 
-C  Control ABAQUS run (pause&go)  ***********************************  
-	DO WHILE (.TRUE.)
-            PRINT *, "Checking for file: ", TRIM(filename_ABAQUS_pause_flag)
+                INQUIRE (FILE=full_f_pause, EXIST=FILEEXISTANCE)
+            
+                IF(FILEEXISTANCE) THEN
+                    PRINT *, "ABAQUS_pause.flag exists"
+                    CALL SLEEPQQ(1000)
+                ELSE
+                    PRINT *, "ABAQUS_pause.flag NOT exists, keep calculation"
+                    EXIT
+                END IF
+            END DO
+        ENDIF
 
-            INQUIRE (FILE=full_filename_pause, EXIST=FILEEXISTANCE)
-		
-            IF(FILEEXISTANCE) THEN
-                  PRINT *, "ABAQUS_pause.flag exists"
-		      CALL SLEEPQQ(1000)
-            ELSE
-                  PRINT *, "ABAQUS_pause.flag NOT exists, keep calculation"
-			EXIT
-            END IF
-	END DO
-C  End of Control ABAQUS run (pause&go)  *********************************** 
+    CASE (j_int_EndAnalysis)
+    ! Clean up the flags
+        PRINT *, "[EndAnalysis] Clean up flags ..."
+        
+        INQUIRE(FILE=TRIM(full_f_pause), EXIST=FILEEXISTANCE)
+        IF (FILEEXISTANCE) THEN
+            OPEN(99, FILE=TRIM(full_f_pause), STATUS="OLD")
+            CLOSE(99, STATUS="DELETE")
+            PRINT *, "Deleted: ", TRIM(full_f_pause)
+        END IF
 
-      return
-      end
+        INQUIRE(FILE=TRIM(full_f_stress_ready), EXIST=FILEEXISTANCE)
+        IF (FILEEXISTANCE) THEN
+            OPEN(98, FILE=TRIM(full_f_stress_ready), STATUS="OLD")
+            CLOSE(98, STATUS="DELETE")
+            PRINT *, "Deleted: ", TRIM(full_f_stress_ready)
+        END IF
+
+        INQUIRE(FILE=TRIM(full_f_running), EXIST=FILEEXISTANCE)
+        IF (FILEEXISTANCE) THEN
+            OPEN(97, FILE=TRIM(full_f_running), STATUS="OLD")
+            CLOSE(97, STATUS="DELETE")
+            PRINT *, "Deleted: ", TRIM(full_f_running)
+        END IF
+
+        PRINT *, "TotalTime=", r_Array(i_flt_TotalTime), &
+                 ", LastStepTime=", r_Array(i_flt_StepTime)
+
+        CALL FLUSH(6)
+    END SELECT
+    RETURN
+END subroutine vexternaldb

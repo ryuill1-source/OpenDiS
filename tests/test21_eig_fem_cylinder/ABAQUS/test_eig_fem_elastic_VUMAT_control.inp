@@ -94,8 +94,8 @@
 ** STEP: Step-1
 ** 
 *Step, name=Step-1, nlgeom=YES
-*Dynamic, Explicit, fixed time incrementation, scale factor=0.1
-, 0.01
+*Dynamic, Explicit, DIRECT USER CONTROL
+1.0E-06, 1.0E-02
 *Bulk Viscosity
 0.06, 1.2
 ** 

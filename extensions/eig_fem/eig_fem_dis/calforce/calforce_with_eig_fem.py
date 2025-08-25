@@ -28,8 +28,28 @@ class CalForce(CalForce_Base):
 
         """
         print("CalForce: AddRemoteForce")
+        # Call ReadRemoteStress function to get FEMSTRESS value
         state = self.ReadRemoteStress(DM, state)
-        # Add remote force to dislocation nodes
+        # Add remote force to dislocation nodes (To be updated: UserStress function)
+        
+        # (08/25/2025, kyeongmi) Remove the ABAQUS_stress_ready.flag for the next step
+        foldername_ABAQUS = state.get("foldername_ABAQUS", None)
+        jobname_head = state.get("jobname_head", None)
+        ABAQUS_input_filename = state.get("ABAQUS_input_filename", None)
+        num_cpus = state.get("num_cpus")
+        ABAQUS_jobname = jobname_head + ABAQUS_input_filename
+
+        # (08/25/2025, kyeongmi) Use wait_aba function which is located in abaqus/modules/wait_aba.py
+        wait_aba(foldername_ABAQUS, ABAQUS_jobname, num_cpus, flag_type = "stress_ready", flag_check_interval = 1)
+        
+        ABAQUS_stress_ready = f"{foldername_ABAQUS}/ABAQUS_stress_ready.flag"
+        if os.path.exists(ABAQUS_stress_ready):
+            os.remove(ABAQUS_stress_ready)
+            print(f"remove {ABAQUS_stress_ready} file")
+        else:
+            print(f"{ABAQUS_stress_ready} does not exist after wait_aba (??)")
+        
+
         return state
 
     def CalEigstrainField(self, DM: DisNetManager, state: dict) -> dict:
@@ -38,7 +58,7 @@ class CalForce(CalForce_Base):
         return state
 
     def FEMRemoteStress(self, DM: DisNetManager, state: dict) -> dict:
-        """AddRemoteForce: add remote force from remote stress on nodes
+        """FEMRemoteForce: removes ABAQUS_pause.flag and generates ABAQUS_running.flag
 
         """
         # export eig strain increment (from previous step)
@@ -52,16 +72,7 @@ class CalForce(CalForce_Base):
         ABAQUS_jobname = jobname_head + ABAQUS_input_filename
 
         # (08/19/2025, kyeongmi) Use wait_aba function which is located in abaqus/modules/wait_aba.py
-        wait_aba(foldername_ABAQUS, ABAQUS_jobname, num_cpus, flag_type = "stress_ready", flag_check_interval = 1)
         wait_aba(foldername_ABAQUS, ABAQUS_jobname, num_cpus, flag_type = "pause", flag_check_interval = 1)
-        
-        # (08/19/2025, kyeongmi) Remove the ABAQUS_stress_ready.flag for the next step
-        ABAQUS_stress_ready = f"{foldername_ABAQUS}/ABAQUS_stress_ready.flag"
-        if os.path.exists(ABAQUS_stress_ready):
-            os.remove(ABAQUS_stress_ready)
-            print(f"remove {ABAQUS_stress_ready} file")
-        else:
-            print(f"{ABAQUS_stress_ready} does not exist after wait_aba (??)")
         
         # (08/14/2025, kyeongmi) remove ABAQUS_pause.flag
         ABAQUS_pause = f"{foldername_ABAQUS}/ABAQUS_pause.flag"
