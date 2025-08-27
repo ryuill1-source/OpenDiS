@@ -11,6 +11,7 @@ from pydis import CalForce as CalForce_Bulk, MobilityLaw as MobilityLaw_Bulk, Ti
 from pydis import Collision, Remesh, VisualizeNetwork
 
 from eig_fem_dis import SimulationDriver, CalForce, Surface_Topology
+from eig_fem_dis.simulate.sim_eig_fem_dis import Nucleation, MAT_TYPE_BCC, MAT_TYPE_FCC #nucleation
 from eig_fem_dis import CalForce as CalForce_withSurface, MobilityLaw as MobilityLaw_withSurface
 
 from eig_fem_dis import run_abaqus, DDM_codes
@@ -63,6 +64,8 @@ def main():
     remote_stress = DDM_codes(state=state)
     calforce = CalForce_withSurface(state=state, calforce_bulk=calforce_bulk)
     mobility = MobilityLaw_withSurface(state=state, mobility_bulk=mobility_bulk)
+    #nucleation
+    nucleation = Nucleation(workdir=os.path.dirname(os.path.abspath(__file__)), dir_femstress = "", stress_filename="SurfaceStress",  material_type=MAT_TYPE_FCC)
 
     # may need to define new Topology class to use compatible force module and mobility module
     topology  = Topology(split_mode='MaxDiss', state=state, force=calforce_bulk, mobility=mobility_bulk)
@@ -71,8 +74,8 @@ def main():
     sim = SimulationDriver(calforce=calforce, mobility=mobility, timeint=timeint,
                           topology=topology, collision=collision, remesh=remesh, vis=vis,
                           remote_stress=remote_stress,
-                          surface_topology=surface_topology,
-                          state=state, max_step=2, loading_mode="stress",
+                          surface_topology=surface_topology,nucleation= nucleation, 
+                          state=state, max_step=5, loading_mode="stress",
                           applied_stress=np.array([0.0, 0.0, 0.0, 0.0, -4.0e8, 0.0]),
                           print_freq=1, plot_freq=1, plot_pause_seconds=0.01,
                           write_freq=1, write_dir='output', save_state=False)
