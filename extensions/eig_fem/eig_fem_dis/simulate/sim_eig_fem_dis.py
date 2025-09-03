@@ -34,7 +34,7 @@ class SimulationDriver(SimulateNetwork):
     def __init__(self, state: dict,
                  remote_stress=None, remote_force=None,
                  surface_mobility=None, surface_topology=None,
-                 nucleation=None,
+                 nucleation=None, 
                  **kwargs) -> None:
         super().__init__(state, **kwargs)
 
@@ -43,7 +43,7 @@ class SimulationDriver(SimulateNetwork):
         self.surface_mobility = surface_mobility
         self.surface_topology = surface_topology
         self.nucleation = nucleation
-
+        
         # Launch abaqus
         # or put at the beginning of test case
 
@@ -66,9 +66,9 @@ class SimulationDriver(SimulateNetwork):
                 self.calforce.FEMRemoteStress(DM, state)
                 
         pass
-    def step_nucleate(self, DM: DisNetManager, state: dict, max_events_per_step: int = 1):
+    def step_nucleate(self, DM: DisNetManager, state: dict):
         """
-        총 3개의 함수로 구성
+        3 Def is called here 
         1) make_nuc_sites 
         2) compute_nucleation
         3) loopgenerate
@@ -83,15 +83,15 @@ class SimulationDriver(SimulateNetwork):
         # 1) call make_nuc_sites
         nu.make_nuc_sites()
         N = 0 if nu.ids is None else nu.ids.size
-        # SurfaceStress load 여부 확인
+        # Check whether SurfaceStress is loaded or not 
         print(f"[NUC] sites loaded: N={N}") 
 
         # 2) call compute_nucleation
-        nu.compute_nucleation(max_nuc_count=max_events_per_step, time_now=state.get("time", 0.0))
+        nu.compute_nucleation(time_now=state.get("time", 0.0))
         totalR = 0.0 if nu.R is None or nu.R.size == 0 else float(nu.R[-1])
         maxP   = 0.0 if nu.P is None or nu.P.size == 0 else float(nu.P.max())
         maxRSS = 0.0 if nu.RSSmax is None or nu.RSSmax.size == 0 else float(np.max(np.abs(nu.RSSmax)))
-        print(f"[NUC] totals: totalR={totalR:.3e}, maxP={maxP:.3e}, max|RSS|={maxRSS:.3e} Pa")
+        print(f"[NUC] totals: totalR={totalR:.3e}, maxP={maxP:.3e}, max|RSS|={maxRSS:.3e} Pa" )
 
         # 3) call compute_nucleation
         sel = np.where(nu.F == 1)[0]  
@@ -99,7 +99,7 @@ class SimulationDriver(SimulateNetwork):
             print("[NUC] no sites flagged by KMC; skip")
             return
 
-        # 4) 선정된 사이트에 루프 생성
+        # 4) call loopgenerate
         for k in sel:
             nu.loopgenerate(DM, site_index=int(k), state={})
         
@@ -268,7 +268,7 @@ class SimulationDriver(SimulateNetwork):
         
 
         self.step_update_response(DM, state)
-        self.step_nucleate(DM, state, max_events_per_step=state.get("max_nuc_per_step", 1)) #추가한 부분 250824
+        self.step_nucleate(DM, state) # nucleaton takes place after step_update_response
 
         self.step_write_files(DM, state)
         self.step_print_info(DM, state)
@@ -284,7 +284,7 @@ MAT_TYPE_BCC = 1
 MAT_TYPE_FCC = 2
   
 class Nucleation:
-    # def __init__ 이 기존 param의 역할을 대체함(상수 보관용) 
+    # def __init__ replaces "param.cc" in C code 
     def __init__(self, 
                  workdir=None,
                  dir_femstress="",
@@ -297,10 +297,11 @@ class Nucleation:
                  act_d=-2.457447e+00,
                  act_e=-1.330434e-01,
                  nuc_stress_min=0.0,     
+                 dt: float=1e-8,
                  rng_seed=8917346):
 
 
-        # workdir 안 주어졌으면 현재 directory
+        # workdir or  directory
         self.workdir = workdir or os.getcwd()
         self.dir_femstress = dir_femstress
         self.stress_filename = stress_filename
@@ -311,18 +312,20 @@ class Nucleation:
         self.v0 = 1.0e13                      # [1/s]
         self.a, self.b, self.c, self.d, self.e = act_a, act_b, act_c, act_d, act_e
         self.nuc_stress_min = float(nuc_stress_min)
+        self.dt=dt
 
-        # 난수기
+        # random 
         self.rng = np.random.default_rng(rng_seed)
 
-        # 입력 데이터(파일에서 채움)
+        # empty data
         self.ids = None          # (N,) int
         self.x = self.y = self.z = None
         self.S11 = self.S22 = self.S33 = None
         self.S23 = self.S13 = self.S12 = None
         self.SCF = None          # (N,)
+        
 
-        # kMC 버퍼(사이트 수 알면 초기화)
+        # Initialize kMC buffer
         self.RSSmax = None       # (N,)
         self.SlipID = None       # (N,)
         self.P = None            # (N,)
@@ -330,13 +333,13 @@ class Nucleation:
         self.F = None            # (N,)
 
         self.time_now = 0.0
-        #self.nuc_freq = 1.0e-12  # 쓰지 않지만 남겨둠
-        self.dtt = 1.0e+10 # 교수님께 물어보고 설정 
+        #self.nuc_freq = 1.0e-12  
+        
 
 
     def make_nuc_sites(self):
         """
-        SurfaceStress 파일 읽고, SCF ~ N (1, 0.05^2) 에서 발생시킴 (0<SCF<9)
+        Read SurfaceStress , Generate SCF ~ N (1, 0.05^2)  in 0<SCF<9
         """
         path = os.path.join(self.workdir, self.dir_femstress, self.stress_filename)
         data = np.loadtxt(path, ndmin=2)  # N, 10 
@@ -352,60 +355,60 @@ class Nucleation:
 
         N = data.shape[0]
 
-        # SCF 생성: N(mu, sd), 절댓값, (0,9)까지 리샘플
+        #self.SCF = np.ones(N, dtype=float)
+
+        # SCF 생성: N(1.0 , 0.05^2) & 0<scf < 9
         mu, sd = 1.0, 0.05
         scf = np.abs(self.rng.normal(mu, sd, size=N))
         bad = (scf <= 0.0) | (scf >= 9.0)
-        # 모든 scf 가 0~9 사이에 들어올 때까지 계속 돌림(알고리즘 가시성 좀 떨어짐)
         while np.any(bad):
             scf[bad] = np.abs(self.rng.normal(mu, sd, size=bad.sum()))
             bad = (scf <= 0.0) | (scf >= 9.0)
         self.SCF = scf
 
-        # kMC 버퍼 초기화
+        # kMC 버퍼 초기화()
         self.RSSmax = np.zeros(N, dtype=float)
         self.SlipID = np.zeros(N, dtype=int)
         self.P = np.zeros(N, dtype=float)
         self.R = np.zeros(N, dtype=float)
         self.F = np.zeros(N, dtype=int)
+        
+        
 
 
     def compute_nucleation(self, max_nuc_count=1, time_now = None, debug_test=False):
-        "calculate_nucleation_cc에 해당"
-        " 1) RSS/확률(p)/누적확률(r) 계산"       
-        " 2) F 초기화"
-        " 3) 최대 max_nuc_count개 site를 kMC(누적확률 룰렛)로 선택하여 F[idx]=1 세팅"
-        " Lastnuctime 부분 생략"
+        "Same as calculate_nucleation_cc"
+        "1) Calculate RSSmax /probability(p)/cumulative probability(r)"    
+        "2) Initialize F"
+        "3) Set F[idx]=1 for the site selected by KMC "
+        
 
-        # 0) 기존 코드엔 여기에 특정 nuctime 이후에 생성이 있었는데, 일단 지금은 뺐습니다.
+        # 0) 
         if time_now is not None:
             self.time_now = float(time_now)
 
 
-        # 1) call compute_RSS_and_probability (이 함수 내에서 RSS & 확률 계산) 
+        # 1) call compute_RSS_and_probability 
         self.compute_RSS_and_probability()
         if self.F is None:
             raise RuntimeError("make_nuc_sites()가 먼저 호출되어야 합니다.")
 
-        # 2) Flag 초기화     
+        # 2) Initialize F
         self.F[:] = 0
-        # 3) 난수를 통해 nucleation을 할 site 선정, total R is obtained by compute_RSS_and_probaiblity
+        # 3) determine site for nucleation, total R is obtained by compute_RSS_and_probaiblity
         totalR = float(self.R[-1]) if self.R.size else 0.0
         if totalR <= 0.0:
-            print(f"[NUC] totalR=0 → no event this step (check dtt/Q/threshold).") 
+            print(f"[NUC] totalR=0 → no event this step") 
             return
         if totalR < 1.0:
-            # 난수가 totalR 밖에 있으면 이번 step은 no nucleation
+            # if random number is outside of  totalR, No nucleation is generated in this step.
             if self.rng.random() >= totalR:
                 return
-        # site 선택
+        # determine site
         u = self.rng.random() * totalR
-        u = min(u, np.nextafter(totalR, 0.0))  # 경계 라운딩 방즘즘
-        # 이 라인이 기존 i[0]< u < i[1] 알고리즘
+        u = min(u, np.nextafter(totalR, 0.0))  
+        # This line is consistent with algorithm i[0]< u < i[1] 
         i = int(np.searchsorted(self.R, u, side="right"))   
-        # below two lines :for the test (must extract from last site)
-        # if i >= self.R.size:
-        #   i = self.R.size - 1
         if 0 <= i < self.R.size:
             self.F[i] = 1               
 
@@ -413,45 +416,47 @@ class Nucleation:
         """
         1) 각 site의 응력 텐서 구성
         2) 모든 slip 시스템에 대해 RSS 계산 후 RSSmax & Slip ID 선택
-        3) SCF 반영
-        4) Q 계산 후 , P = Δt * v0 * exp(-Q/kBT)
-        5) 누적확률 R = cumsum(p)
+        3) Multiple SCF 
+        4) Calculate Q and P -->  P = Δt * v0 * exp(-Q/kBT)
+        5) R = cumsum(p)
         """
-        # 개수 확인 
+        # check the number of Stress tensor (if it is 6 or not)
         if any(v is None for v in [self.S11, self.S22, self.S33, self.S23, self.S13, self.S12, self.SCF]):
             raise RuntimeError("make_nuc_sites() 이후에 호출하세요.")
         N = self.S11.size
         if any(x.size != N for x in [self.S22, self.S33, self.S23, self.S13, self.S12, self.SCF]):
             raise ValueError("응력/SCF 배열 길이가 일치하지 않습니다.")
 
-        # 버퍼 준비
+        # Buffer
         if self.RSSmax is None or self.RSSmax.size != N:
             self.RSSmax = np.zeros(N, dtype=float)
             self.SlipID = np.zeros(N, dtype=int)
             self.P      = np.zeros(N, dtype=float)
             self.R      = np.zeros(N, dtype=float)
+              
 
 
         slip_nb = self._slip_nb()  # [(n,b), ...]
         stress_min = float(self.nuc_stress_min)  # [Pa]
         
 
-        # nuc_site 에서 받아온 data들을 호출함.
+        # call data from make_nuc_site
 
         for k in range(N):
-            # 대칭 응력텐서
+            # make SS symmetric stress tensor
             SS = np.array([[self.S11[k], self.S12[k], self.S13[k]],
                           [self.S12[k], self.S22[k], self.S23[k]],
                         [self.S13[k], self.S23[k], self.S33[k]]], dtype=float)
         
-            # b · (SS · n) 전 slip 시스템 , SCF 곱해줌.
+            # RSS_all = b · (SS · n) for all slip system(FCC or BCC) 
             RSS_all = np.fromiter((float(np.dot(b, SS.dot(n))) for (n, b) in slip_nb), dtype=float, count=len(slip_nb))
-            idx = int(np.argmax(np.abs(RSS_all)))       # 절댓값 최대
-            RSSmax = RSS_all[idx] * self.SCF[k]         # roughness scaling
+            idx = int(np.argmax(np.abs(RSS_all)))       # Returns the index of the maximum absolute value      
+            RSSmax=RSS_all[idx] * self.SCF[k]  
             self.RSSmax[k] = RSSmax
             self.SlipID[k] = idx
 
-            # 임계값 안 넘으면 p=0 고정(수정 필요)
+
+            # if Rssmax is below stress_min , P = 0 during this step
             if abs(RSSmax) <= stress_min:
                 self.P[k] = 0.0
                 continue
@@ -459,17 +464,17 @@ class Nucleation:
             RSS_GPa = max(abs(RSSmax) / 1e9, 0.5)
 
 
-            #Activation energy Q 구하기 (BCC, FCC)
+            #Calculate Activation energy Q (BCC, FCC)
             if self.material_type == MAT_TYPE_BCC:
                 Qk = self.a * ((1.0 - (SS1 / b_scale)) ** self.c) * (1.0 - (self.T / self.d))
             else:  # FCC
                 Qk = self.a * (RSS_GPa ** self.b) - self.c * self.T * (RSS_GPa ** self.d) + self.e
 
         
-            # probability P 구하기(dtt 값 수정필요)
-            self.P[k] = self.dtt * self.v0 * np.exp(-Qk / self.kB_eV)
+            # Calculatre probability P 
+            self.P[k] = self.dt * self.v0 * np.exp(-Qk / self.kB_eV)
 
-        # 누적 합 (1,2,3,4,5,6) --> np.cumsum(1,3,6,10,15,21)-> 위에서 이 cumsum의 마지막 항이 total R이 됨.
+        # For example, the cumulative sum of (1,2,3,4,5,6) is (1,3,6,10,15,21), and then, the last term gives the total R
         self.R = np.cumsum(self.P)
             
                                  
@@ -480,7 +485,7 @@ class Nucleation:
         """
         k = int(site_index)
 
-        # --- 핵심: F 플래그 확인 ---
+        # check F flag
         if self.F is None or k < 0 or k >= self.F.size:
             raise IndexError(f"[NUC] invalid site_index={k}")
         if self.F[k] != 1:
@@ -504,12 +509,11 @@ class Nucleation:
         # 선택된 slip system의 n,b 가져오기
         k = int(site_index)
         slip_id = int(self.SlipID[k])
-        n, b = self._slip_nb()[slip_id]           # ← 선택된 슬립시스템의 (normal, burgers)
-
-        print(f"[DEBUG] site {k}: slip_id={slip_id}")
-        print(f"[DEBUG] RSSmax={self.RSSmax[k]:.3e} Pa")
-        print(f"[DEBUG] normal (n) = {n}")
-        print(f"[DEBUG] burgers(b) = {b}")
+        n, b = self._slip_nb()[slip_id]          # ← 선택된 슬립시스템의 (normal, burgers)
+        print(f"[NUC] site {k}: slip_id={slip_id}")
+        print(f"[NUC] RSSmax={self.RSSmax[k]:.3e} Pa")
+        print(f"[NUC] normal (n) = {n}")
+        print(f"[NUC] burgers(b) = {b}")
 
         # 이벤트 전용 state 사본
         st = dict(state)
@@ -524,18 +528,22 @@ class Nucleation:
         nrm = np.asarray(st["normal"], float)
         bvec = np.asarray(st["burgers"], float)
 
-        # n·b 직교화 보정
-        #if abs(dot_nb) > 1e-8:
-        #   bvec = bvec - dot_nb * (nrm/np.linalg.norm(nrm))
-        #    st["burgers"] = bve
-
         # 노드 개수: int(2πR/mexseg), 5~10로 클리핑 (최소 5 보장)
         num_min = int(st.get("num_min", 5))
         num_max = int(st.get("num_max", 10))
-        seg_len = float(st.get("seg_len", st.get("mexseg", st.get("maxseg", 15.0))))
+        seg_len = float(st.get("seg_len", st.get("mexseg", 15.0)))
         est = int(2.0 * np.pi * R / max(seg_len, 1e-9))
-        nnode = max(5, min(num_max, max(num_min, est)))
 
+        nnode = est
+
+        # lower bound
+        if nnode < num_min:
+            nnode = num_min
+
+        # upper bound
+        if nnode > num_max:
+            nnode = num_max
+    
         # plane basis
         def _unit(v):
             v = np.asarray(v, float); nrmv = np.linalg.norm(v)
@@ -551,11 +559,11 @@ class Nucleation:
         # --- 그래프 핸들 & 태그 확보 ---
         G = DM.get_disnet(DisNet)
         gid0, lid0 = G.get_new_tag(recycle=False)
-
         # --- 노드 좌표 생성 ---
         thetas = np.linspace(0.0, 2.0 * np.pi, nnode, endpoint=False)
         xyz = np.array([c + R * (np.cos(t) * e1 + np.sin(t) * e2) for t in thetas])
         constraints = np.zeros((nnode, 1), dtype=int)
+        constraints[[0, -1], 0] = 7
 
         # rn 형식: [gid, lid, x, y, z, constraint]
         tags = np.array([[gid0, lid0 + i] for i in range(nnode)], dtype=int)
