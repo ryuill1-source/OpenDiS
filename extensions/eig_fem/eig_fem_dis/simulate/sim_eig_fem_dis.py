@@ -268,8 +268,8 @@ class SimulationDriver(SimulateNetwork):
         
 
         self.step_update_response(DM, state)
-        self.step_nucleate(DM, state) # nucleaton takes place after step_update_response
-
+        self.step_nucleate(DM, state)   #  Apply nucleation-induced plastic strain just before writing files  
+                                        # to ensure it is fully reflected in the output
         self.step_write_files(DM, state)
         self.step_print_info(DM, state)
         self.step_visualize(DM, state)
@@ -279,10 +279,9 @@ class SimulationDriver(SimulateNetwork):
 
         return state
     
+MAT_TYPE_FCC = 1
+MAT_TYPE_BCC = 2
 
-MAT_TYPE_BCC = 1
-MAT_TYPE_FCC = 2
-  
 class Nucleation:
     # def __init__ replaces "param.cc" in C code 
     def __init__(self, 
@@ -290,32 +289,49 @@ class Nucleation:
                  dir_femstress="",
                  stress_filename='SurfaceStress',
                  material_type=MAT_TYPE_FCC,
-                 temperature_K=298.15e+00,  
+                 # thermal / physical
+                 temperature_K: float = 298.15, 
+                 v0: float = 1.0e13,                     # attempt frequency [1/s]
+                 # activation constants
                  act_a=4.811799e+00,
                  act_b=-2.359345e+00,
                  act_c=4.742173e-03,
                  act_d=-2.457447e+00,
                  act_e=-1.330434e-01,
-                 nuc_stress_min=0.0,     
-                 dt: float=1e-8,
-                 rng_seed=8917346):
+                 # thresholds / time
+                 nuc_stress_min: float = 0.0,     
+                 dt: float = 1e-8,
+                 # SCF params
+                 rng_seed: int = 8917346,
+                 scf_mu: float = 1.0,
+                 scf_sd: float = 0.05,
+                 scf_min: float = 0.0,
+                 scf_max: float = 9.0,
+                 overrides: dict | None = None):
+        o = overrides or {}
 
-
-        # workdir or  directory
+        # workdir or directory
         self.workdir = workdir or os.getcwd()
         self.dir_femstress = dir_femstress
         self.stress_filename = stress_filename
 
         self.material_type = material_type
         self.T = float(temperature_K)
-        self.kB_eV = 8.6173324e-5 * self.T    # [eV]
-        self.v0 = 1.0e13                      # [1/s]
+        self.kB_eV = 8.6173324e-5 * self.T    # [eV]  
+        self.v0 = float(v0)                   # [1/s]
+
         self.a, self.b, self.c, self.d, self.e = act_a, act_b, act_c, act_d, act_e
         self.nuc_stress_min = float(nuc_stress_min)
-        self.dt=dt
+        self.dt = float(dt)
 
         # random 
-        self.rng = np.random.default_rng(rng_seed)
+        self.rng = np.random.default_rng(int(rng_seed))
+
+        # SCF params 
+        self.scf_mu  = float(scf_mu)
+        self.scf_sd  = float(scf_sd)
+        self.scf_min = float(scf_min)
+        self.scf_max = float(scf_max)
 
         # empty data
         self.ids = None          # (N,) int
@@ -323,7 +339,6 @@ class Nucleation:
         self.S11 = self.S22 = self.S33 = None
         self.S23 = self.S13 = self.S12 = None
         self.SCF = None          # (N,)
-        
 
         # Initialize kMC buffer
         self.RSSmax = None       # (N,)
@@ -333,7 +348,8 @@ class Nucleation:
         self.F = None            # (N,)
 
         self.time_now = 0.0
-        #self.nuc_freq = 1.0e-12  
+        # self.nuc_freq = 1.0e-12
+ 
         
 
 
@@ -355,18 +371,18 @@ class Nucleation:
 
         N = data.shape[0]
 
-        #self.SCF = np.ones(N, dtype=float)
 
         # SCF 생성: N(1.0 , 0.05^2) & 0<scf < 9
-        mu, sd = 1.0, 0.05
-        scf = np.abs(self.rng.normal(mu, sd, size=N))
-        bad = (scf <= 0.0) | (scf >= 9.0)
-        while np.any(bad):
+        mu, sd = self.scf_mu, self.scf_sd                    
+        lo, hi = self.scf_min, self.scf_max                 
+        scf = np.abs(self.rng.normal(mu, sd, size=N))             
+        bad = (scf <= lo) | (scf >= hi)                          
+        while np.any(bad):                                         
             scf[bad] = np.abs(self.rng.normal(mu, sd, size=bad.sum()))
-            bad = (scf <= 0.0) | (scf >= 9.0)
+            bad = (scf <= lo) | (scf >= hi)
         self.SCF = scf
 
-        # kMC 버퍼 초기화()
+        # Initialize buffer
         self.RSSmax = np.zeros(N, dtype=float)
         self.SlipID = np.zeros(N, dtype=int)
         self.P = np.zeros(N, dtype=float)
@@ -414,18 +430,18 @@ class Nucleation:
 
     def compute_RSS_and_probability(self):
         """
-        1) 각 site의 응력 텐서 구성
-        2) 모든 slip 시스템에 대해 RSS 계산 후 RSSmax & Slip ID 선택
+        1) Construct the stress tensor for each site
+        2) Calculate RSS for all slip systems, then select RSSmax and Slip ID
         3) Multiple SCF 
         4) Calculate Q and P -->  P = Δt * v0 * exp(-Q/kBT)
         5) R = cumsum(p)
         """
         # check the number of Stress tensor (if it is 6 or not)
         if any(v is None for v in [self.S11, self.S22, self.S33, self.S23, self.S13, self.S12, self.SCF]):
-            raise RuntimeError("make_nuc_sites() 이후에 호출하세요.")
+            raise RuntimeError("Call after make_nuc_sites().")
         N = self.S11.size
         if any(x.size != N for x in [self.S22, self.S33, self.S23, self.S13, self.S12, self.SCF]):
-            raise ValueError("응력/SCF 배열 길이가 일치하지 않습니다.")
+            raise ValueError("Stress/SCF array lengths do not match.")
 
         # Buffer
         if self.RSSmax is None or self.RSSmax.size != N:
@@ -466,7 +482,7 @@ class Nucleation:
 
             #Calculate Activation energy Q (BCC, FCC)
             if self.material_type == MAT_TYPE_BCC:
-                Qk = self.a * ((1.0 - (SS1 / b_scale)) ** self.c) * (1.0 - (self.T / self.d))
+                Qk = self.a * ((1.0 - (SS1 / self.b)) ** self.c) * (1.0 - (self.T / self.d))
             else:  # FCC
                 Qk = self.a * (RSS_GPa ** self.b) - self.c * self.T * (RSS_GPa ** self.d) + self.e
 
@@ -481,7 +497,7 @@ class Nucleation:
 
     def loopgenerate(self, DM,  site_index: int, state: dict, generator_fn=None):
         """
-        선택된 site_index에 대해 실제 loop를 생성
+        Create the actual loop for the selected site_index
         """
         k = int(site_index)
 
@@ -494,41 +510,41 @@ class Nucleation:
 
         #st copy
         st = dict(state or {})  # copy
-        return self.Loopcharacter(DM, st, site_index=k)
+        return self.FullLoop(DM, st, site_index=k)
 
-    def Loopcharacter(self, DM: DisNetManager, state: dict, site_index: int):    
+    def FullLoop(self, DM: DisNetManager, state: dict, site_index: int):    
         """
-        center/loop R/maxseg로 원형 루프를 생성
-        필요한 state 키:
+        center/loop R/maxseg --> generate circle loop
+        state
         - 'center': (cx, cy, cz)  # element center
         - 'loopR': float          # loop radius
-        - 'mexseg': float         # maximum segment length (segment 당 목표 길이)
-        - 'normal': (nx, ny, nz)  # slip plane normal (Max RSS에서 온 값)
-        # (선택) 'num_min', 'num_max' : 노드 개수 하/상한 (기본 5~10)
+        - 'mexseg': float         # maximum segment length 
+        - 'normal': (nx, ny, nz)  # slip plane normal (
+       
         """
-        # 선택된 slip system의 n,b 가져오기
+        # n,b from selected slip system
         k = int(site_index)
         slip_id = int(self.SlipID[k])
-        n, b = self._slip_nb()[slip_id]          # ← 선택된 슬립시스템의 (normal, burgers)
+        n, b = self._slip_nb()[slip_id]          
         print(f"[NUC] site {k}: slip_id={slip_id}")
         print(f"[NUC] RSSmax={self.RSSmax[k]:.3e} Pa")
         print(f"[NUC] normal (n) = {n}")
         print(f"[NUC] burgers(b) = {b}")
 
-        # 이벤트 전용 state 사본
+        # copy state as st
         st = dict(state)
         st.setdefault("center", (float(self.x[k]), float(self.y[k]), float(self.z[k])))
         st.setdefault("loopR", 40.0)
         st.setdefault("normal", n)
         st.setdefault("burgers", b)
 
-        # 불러오기
+        # call 
         c = np.asarray(st["center"], float)
         R = float(st["loopR"])
         nrm = np.asarray(st["normal"], float)
         bvec = np.asarray(st["burgers"], float)
 
-        # 노드 개수: int(2πR/mexseg), 5~10로 클리핑 (최소 5 보장)
+        # Num node: int(2πR/mexseg), 5~10
         num_min = int(st.get("num_min", 5))
         num_max = int(st.get("num_max", 10))
         seg_len = float(st.get("seg_len", st.get("mexseg", 15.0)))
@@ -556,28 +572,28 @@ class Nucleation:
             return e1,e2
         e1,e2 = _plane_basis_from_normal(nrm)
 
-        # --- 그래프 핸들 & 태그 확보 ---
+        # graph tag
         G = DM.get_disnet(DisNet)
         gid0, lid0 = G.get_new_tag(recycle=False)
-        # --- 노드 좌표 생성 ---
+        # node coordinate
         thetas = np.linspace(0.0, 2.0 * np.pi, nnode, endpoint=False)
         xyz = np.array([c + R * (np.cos(t) * e1 + np.sin(t) * e2) for t in thetas])
         constraints = np.zeros((nnode, 1), dtype=int)
         constraints[[0, -1], 0] = 7
 
-        # rn 형식: [gid, lid, x, y, z, constraint]
+        # rn : [gid, lid, x, y, z, constraint]
         tags = np.array([[gid0, lid0 + i] for i in range(nnode)], dtype=int)
         rn = np.hstack([tags, xyz, constraints])
 
-        # --- 링크 생성 (원형 루프) ---
-        # 형식: [src_idx, dst_idx, bx, by, bz, nx, ny, nz]
+        
+        # links: [src_idx, dst_idx, bx, by, bz, nx, ny, nz]
         links_rows = []
         for i in range(nnode):
             j = (i + 1) % nnode
             links_rows.append([i, j, bvec[0], bvec[1], bvec[2], nrm[0], nrm[1], nrm[2]])
         links = np.array(links_rows, dtype=float)
 
-        # --- 네트워크에 삽입 ---
+        # insert in network
         G.add_nodes_segments_from_list(rn, links)
         print(f">>> Nucleation loop inserted! center={c}, R={R}, nnode={nnode}")
 
@@ -591,8 +607,7 @@ class Nucleation:
         return: list of (n(3,), b(3,))"""
         
         if self.material_type== MAT_TYPE_BCC:
-            # C 코드와 동일 정의 (24개)
-            # (여기서는 그대로 옮김 — 길지만 명시적)
+           
             # --- normals ---
             n1  = np.array([ 1/np.sqrt(2), 0.0,  1/np.sqrt(2)])
             n2  = np.array([ 0.0,  1/np.sqrt(2),  1/np.sqrt(2)])
@@ -640,7 +655,7 @@ class Nucleation:
             ]
 
         elif self.material_type == MAT_TYPE_FCC:
-            # FCC: 12개
+            # FCC: 12
             n1 = np.array([ 1/np.sqrt(3),  1/np.sqrt(3),  1/np.sqrt(3)])
             n2 = np.array([-1/np.sqrt(3),  1/np.sqrt(3),  1/np.sqrt(3)])
             n3 = np.array([ 1/np.sqrt(3), -1/np.sqrt(3),  1/np.sqrt(3)])

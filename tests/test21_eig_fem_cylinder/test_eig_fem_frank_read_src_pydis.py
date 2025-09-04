@@ -11,7 +11,7 @@ from pydis import CalForce as CalForce_Bulk, MobilityLaw as MobilityLaw_Bulk, Ti
 from pydis import Collision, Remesh, VisualizeNetwork
 
 from eig_fem_dis import SimulationDriver, CalForce, Surface_Topology
-from eig_fem_dis.simulate.sim_eig_fem_dis import Nucleation, MAT_TYPE_BCC, MAT_TYPE_FCC #nucleation
+from eig_fem_dis.simulate.sim_eig_fem_dis import Nucleation, MAT_TYPE_BCC, MAT_TYPE_FCC
 from eig_fem_dis import CalForce as CalForce_withSurface, MobilityLaw as MobilityLaw_withSurface
 
 from eig_fem_dis import run_abaqus, DDM_codes
@@ -65,7 +65,13 @@ def main():
     calforce = CalForce_withSurface(state=state, calforce_bulk=calforce_bulk)
     mobility = MobilityLaw_withSurface(state=state, mobility_bulk=mobility_bulk)
     #nucleation
-    nucleation = Nucleation(workdir=os.path.dirname(os.path.abspath(__file__)), dir_femstress = "", stress_filename="SurfaceStress",  material_type=MAT_TYPE_FCC)
+    nucleation = Nucleation(workdir=os.path.dirname(os.path.abspath(__file__)), 
+                            dir_femstress = "", 
+                            stress_filename="SurfaceStress",  
+                            material_type=MAT_TYPE_FCC, 
+                            overrides={"act_a": 4.811799e+00,"act_b": -2.359345e+00,"act_c": 4.742173e-03,"act_d": -2.457447e+00,"act_e": -1.330434e-01,
+                                       "scf_mu": 1.0,"scf_sd": 0.05,"scf_min": 0.0,"scf_max": 9.0,
+                                        "temperature_K": 298.15,"dt": 5e-9})
 
     # may need to define new Topology class to use compatible force module and mobility module
     topology  = Topology(split_mode='MaxDiss', state=state, force=calforce_bulk, mobility=mobility_bulk)
