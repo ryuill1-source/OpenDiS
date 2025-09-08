@@ -279,10 +279,10 @@ class SimulationDriver(SimulateNetwork):
 
         return state
     
+MAT_TYPE_FCC = 1
+MAT_TYPE_BCC = 2
 
 class Nucleation:
-    MAT_TYPE_FCC = 1
-    MAT_TYPE_BCC = 2
     # def __init__ replaces "param.cc" in C code 
     def __init__(self, 
                  workdir=None,
@@ -481,7 +481,7 @@ class Nucleation:
 
 
             #Calculate Activation energy Q (BCC, FCC)
-            if self.material_type == self.MAT_TYPE_BCC:
+            if self.material_type == MAT_TYPE_BCC:
                 Qk = self.a * ((1.0 - (SS1 / self.b)) ** self.c) * (1.0 - (self.T / self.d))
             else:  # FCC
                 Qk = self.a * (RSS_GPa ** self.b) - self.c * self.T * (RSS_GPa ** self.d) + self.e
@@ -606,7 +606,7 @@ class Nucleation:
         useLabFrame==True이면 rotMatrix로 n,b를 회전.
         return: list of (n(3,), b(3,))"""
         
-        if self.material_type == self.MAT_TYPE_BCC:
+        if self.material_type== MAT_TYPE_BCC:
            
             # --- normals ---
             n1  = np.array([ 1/np.sqrt(2), 0.0,  1/np.sqrt(2)])
@@ -654,7 +654,7 @@ class Nucleation:
                 b7, b7, b7, b8, b8, b8, b9, b9, b9, b10, b10, b10
             ]
 
-        elif self.material_type == self.MAT_TYPE_FCC:
+        elif self.material_type == MAT_TYPE_FCC:
             # FCC: 12
             n1 = np.array([ 1/np.sqrt(3),  1/np.sqrt(3),  1/np.sqrt(3)])
             n2 = np.array([-1/np.sqrt(3),  1/np.sqrt(3),  1/np.sqrt(3)])
