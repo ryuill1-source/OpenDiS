@@ -63,6 +63,7 @@ subroutine vexternaldb(lOp, i_Array, niArray, r_Array, nrArray)
     INTEGER            :: i_Array(niArray)
     DOUBLE PRECISION   :: r_Array(nrArray)
     LOGICAL            :: FILEEXISTANCE
+    LOGICAL            :: STOP_EXISTS
     INTEGER            :: kInc
 !  i_Array index map
     INTEGER, PARAMETER :: i_int_nTotalNodes    = 1
@@ -85,22 +86,38 @@ subroutine vexternaldb(lOp, i_Array, niArray, r_Array, nrArray)
 	CHARACTER(*), PARAMETER :: f_stress_ready_flag = "ABAQUS_stress_ready"
 	CHARACTER(*), PARAMETER :: f_pause_flag = "ABAQUS_pause"
     CHARACTER(*), PARAMETER :: f_running_flag = "ABAQUS_running"
+    CHARACTER(*), PARAMETER :: f_stop_flag = "ABAQUS_stop"
 !   [CAUTION] foldername should be ABSOLUTE PATH !!!!
-    CHARACTER(*), PARAMETER :: foldername = "/home/wnswjswk1/Codes/OpenDiS/tests/test21_eig_fem_cylinder/ABAQUS"
+    CHARACTER(*), PARAMETER :: foldername = "/home/kyeongmi/Codes/OpenDiS.eig_fem.git/tests/test21_eig_fem_cylinder/ABAQUS"
     CHARACTER(*), PARAMETER :: f_flag = ""
     CHARACTER(LEN=256) :: full_f_pause
     CHARACTER(LEN=256) :: full_f_stress_ready
     CHARACTER(LEN=256) :: full_f_running
+    CHARACTER(LEN=256) :: full_f_stop
 
     full_f_pause = TRIM(foldername)//"/"//TRIM(f_pause_flag)//TRIM(f_flag)//".flag"
     full_f_stress_ready = TRIM(foldername)//"/"//TRIM(f_stress_ready_flag)//TRIM(f_flag)//".flag"
     full_f_running = TRIM(foldername)//"/"//TRIM(f_running_flag)//TRIM(f_flag)//".flag"
+    full_f_stop = TRIM(foldername)//"/"//TRIM(f_stop_flag)//TRIM(f_flag)//".flag"
     
     SELECT CASE (lOp)
     
+    CASE (j_int_StartIncrement)
+        INQUIRE(FILE=full_f_stop, EXIST=STOP_EXISTS)
+        IF (STOP_EXISTS) THEN
+            PRINT *, "VEXTERNALDB: ABAQUS_stop.flag detected at StartIncrement. Terminating..."
+            CALL XPLB_EXIT
+        END IF
+
     CASE (j_int_EndIncrement)
         PRINT *, "EndInc: kInc=", i_Array(i_int_kInc), &
            " StepTime=", r_Array(i_flt_StepTime), " dt=", r_Array(i_flt_dTime)
+        ! Abort check first: terminate cleanly if stop flag exists
+        INQUIRE(FILE=full_f_stop, EXIST=STOP_EXISTS)
+        IF (STOP_EXISTS) THEN
+            PRINT *, "VEXTERNALDB: ABAQUS_stop.flag detected at EndIncrement. Terminating..."
+            CALL XPLB_EXIT
+        END IF
         ! Check the step number
         kInc = i_Array(i_int_kInc)
         IF (kInc == 1) THEN
