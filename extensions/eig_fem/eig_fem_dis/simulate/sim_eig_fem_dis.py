@@ -4,6 +4,7 @@ SimulationDriver: class for simulating dislocation network with boundary value p
 Provide simulation functions based on other utlitity classes
 """
 import sys, os
+import subprocess
 pydis_paths = ['../../../../python', '../../../../lib', '../../../../core/pydis/python']
 [sys.path.append(os.path.abspath(path)) for path in pydis_paths if not path in sys.path]
 
@@ -251,7 +252,40 @@ class SimulationDriver(SimulateNetwork):
     #    print("my_new_function is called")
     #    pass
 
+    def step_end(self, DM: DisNetManager, state: dict):
+        """(09/09/2025, kyeongmi) ABAQUS should be terminated at the end of the simulation.
+        """
+        foldername_ABAQUS = state.get("foldername_ABAQUS", None)
+        jobname_head = state.get("jobname_head", None)
+        ABAQUS_input_filename = state.get("ABAQUS_input_filename", None)
+        num_cpus = state.get("num_cpus")
+        ABAQUS_jobname = jobname_head + ABAQUS_input_filename
+        istep = state.get("istep")
 
+        #print(f"DEBUG: istep = {istep}, max_step = {self.max_step}, type(istep) = {type(istep)}")
+        if istep == self.max_step -1:
+            # (09/09/2025, kyeongmi) Creates ABAQUS_stop.flag
+            ABAQUS_stop = f"{foldername_ABAQUS}/ABAQUS_stop.flag"
+            with open(ABAQUS_stop, "w") as f:
+                f.write("")    
+            print(f"[istep = {istep}] created {ABAQUS_stop} file, vexternaldb forces ABAQUS to quit ..")       
+            
+            ABAQUS_pause = f"{foldername_ABAQUS}/ABAQUS_pause.flag"
+            if os.path.exists(ABAQUS_pause):
+                os.remove(ABAQUS_pause)
+                print(f"    remove {ABAQUS_pause} file")
+            else:
+                print(f"    {ABAQUS_pause} does not exist.")    
+            ABAQUS_running = f"{foldername_ABAQUS}/ABAQUS_running.flag"
+            if os.path.exists(ABAQUS_running):
+                os.remove(ABAQUS_running)
+                print(f"    remove {ABAQUS_running} file")
+            else:
+                print(f"    {ABAQUS_running} does not exist.")    
+        else:
+            pass
+           
+   
     def step(self, DM: DisNetManager, state: dict):
         istep = state.get("istep", -1)
 
