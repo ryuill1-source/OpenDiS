@@ -252,6 +252,7 @@ class SimulationDriver(SimulateNetwork):
     #    print("my_new_function is called")
     #    pass
 
+
     def step_end(self, DM: DisNetManager, state: dict):
         """(09/09/2025, kyeongmi) ABAQUS should be terminated at the end of the simulation.
         """
@@ -261,31 +262,29 @@ class SimulationDriver(SimulateNetwork):
         num_cpus = state.get("num_cpus")
         ABAQUS_jobname = jobname_head + ABAQUS_input_filename
         istep = state.get("istep")
-
         #print(f"DEBUG: istep = {istep}, max_step = {self.max_step}, type(istep) = {type(istep)}")
         if istep == self.max_step -1:
             # (09/09/2025, kyeongmi) Creates ABAQUS_stop.flag
             ABAQUS_stop = f"{foldername_ABAQUS}/ABAQUS_stop.flag"
             with open(ABAQUS_stop, "w") as f:
-                f.write("")    
-            print(f"[istep = {istep}] created {ABAQUS_stop} file, vexternaldb forces ABAQUS to quit ..")       
-            
+                f.write("")
+            print(f"[istep = {istep}] created {ABAQUS_stop} file, vexternaldb forces ABAQUS to quit ..")
             ABAQUS_pause = f"{foldername_ABAQUS}/ABAQUS_pause.flag"
             if os.path.exists(ABAQUS_pause):
                 os.remove(ABAQUS_pause)
                 print(f"    remove {ABAQUS_pause} file")
             else:
-                print(f"    {ABAQUS_pause} does not exist.")    
+                print(f"    {ABAQUS_pause} does not exist.")
             ABAQUS_running = f"{foldername_ABAQUS}/ABAQUS_running.flag"
             if os.path.exists(ABAQUS_running):
                 os.remove(ABAQUS_running)
                 print(f"    remove {ABAQUS_running} file")
             else:
-                print(f"    {ABAQUS_running} does not exist.")    
+                print(f"    {ABAQUS_running} does not exist.")
         else:
             pass
-           
-   
+
+
     def step(self, DM: DisNetManager, state: dict):
         istep = state.get("istep", -1)
 
@@ -313,10 +312,11 @@ class SimulationDriver(SimulateNetwork):
 
         return state
     
-MAT_TYPE_FCC = 1
-MAT_TYPE_BCC = 2
+
 
 class Nucleation:
+    MAT_TYPE_FCC = 1
+    MAT_TYPE_BCC = 2
     # def __init__ replaces "param.cc" in C code 
     def __init__(self, 
                  workdir=None,
@@ -397,7 +397,7 @@ class Nucleation:
         if data.shape[1] != 10:
             raise ValueError(f"SurfaceStress must have 10 columns, got {data.shape[1]}")
 
-        # 언패킹(Element id, center xyz, stress tensor 6)
+        # initialization(Element id, center xyz, stress tensor 6)
         self.ids = data[:, 0].astype(int)
         self.x, self.y, self.z = data[:, 1], data[:, 2], data[:, 3]
         self.S11, self.S22, self.S33 = data[:, 4], data[:, 5], data[:, 6]
@@ -406,7 +406,7 @@ class Nucleation:
         N = data.shape[0]
 
 
-        # SCF 생성: N(1.0 , 0.05^2) & 0<scf < 9
+        # Generate SCF : N(1.0 , 0.05^2) & 0<scf < 9
         mu, sd = self.scf_mu, self.scf_sd                    
         lo, hi = self.scf_min, self.scf_max                 
         scf = np.abs(self.rng.normal(mu, sd, size=N))             
@@ -441,7 +441,7 @@ class Nucleation:
         # 1) call compute_RSS_and_probability 
         self.compute_RSS_and_probability()
         if self.F is None:
-            raise RuntimeError("make_nuc_sites()가 먼저 호출되어야 합니다.")
+            raise RuntimeError("must be called after make_nuc_sites().")
 
         # 2) Initialize F
         self.F[:] = 0
@@ -515,7 +515,7 @@ class Nucleation:
 
 
             #Calculate Activation energy Q (BCC, FCC)
-            if self.material_type == MAT_TYPE_BCC:
+            if self.material_type == Nucleation.MAT_TYPE_BCC:
                 Qk = self.a * ((1.0 - (SS1 / self.b)) ** self.c) * (1.0 - (self.T / self.d))
             else:  # FCC
                 Qk = self.a * (RSS_GPa ** self.b) - self.c * self.T * (RSS_GPa ** self.d) + self.e
@@ -637,12 +637,10 @@ class Nucleation:
 
 
     def _slip_nb(self):
-        """ C 코드의 nbmatrix(각 행이 [n(3), b(3)])를 그대로 만든 다음
-        useLabFrame==True이면 rotMatrix로 n,b를 회전.
+        """Constructs the nbmatrix from the C code (each row is [n(3), b(3)])
+        useLabfram= true --> rotate n and b with rotatematrix
         return: list of (n(3,), b(3,))"""
-        
-        if self.material_type== MAT_TYPE_BCC:
-           
+        if self.material_type== Nucleation.MAT_TYPE_BCC:
             # --- normals ---
             n1  = np.array([ 1/np.sqrt(2), 0.0,  1/np.sqrt(2)])
             n2  = np.array([ 0.0,  1/np.sqrt(2),  1/np.sqrt(2)])
@@ -689,7 +687,7 @@ class Nucleation:
                 b7, b7, b7, b8, b8, b8, b9, b9, b9, b10, b10, b10
             ]
 
-        elif self.material_type == MAT_TYPE_FCC:
+        elif self.material_type == Nucleation.MAT_TYPE_FCC:
             # FCC: 12
             n1 = np.array([ 1/np.sqrt(3),  1/np.sqrt(3),  1/np.sqrt(3)])
             n2 = np.array([-1/np.sqrt(3),  1/np.sqrt(3),  1/np.sqrt(3)])
