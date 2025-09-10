@@ -28,9 +28,9 @@ class CalForce(CalForce_Base):
 
         """
         print("CalForce: AddRemoteForce")
-        # Call ReadRemoteStress function to get FEMSTRESS value
+        # Call ReadRemoteStress function to read FEMSTRESS and get stress tensor,
+        # which is saved in self.segment_stress
         state = self.ReadRemoteStress(DM, state)
-        # Add remote force to dislocation nodes (To be updated: UserStress function)
         
         # (08/25/2025, kyeongmi) Remove the ABAQUS_stress_ready.flag for the next step
         foldername_ABAQUS = state.get("foldername_ABAQUS", None)
@@ -49,6 +49,57 @@ class CalForce(CalForce_Base):
         else:
             print(f"{ABAQUS_stress_ready} does not exist after wait_aba (??)")
         
+
+        # (09/03/2025, kyeongmi) Add remote force to dislocation nodes (To be updated: UserStress function)
+        # Access and get information from DisNet class
+       
+        # (09/08/2025, kyeongmi) The following only works for ExaDisNet Class
+        #G = DM.get_disnet(DisNet) 
+        #cell = G.cell
+        #rn = G.get_nodes_data()["positions"]
+        #segs = G.get_segs_data()
+        #segsnid = segs["nodeids"]
+        #b_ij = segs["burgers"]
+
+        # (09/08/2025, kyeongmi) For DisNet Class
+        G = DM.get_disnet(DisNet) 
+        data = DM.export_data()
+        rn = np.array(data["nodes"]["positions"])         # shape: (N_nodes, 3)
+        segsnid = np.array(data["segs"]["nodeids"])       # shape: (N_segs, 2)
+        b_ij = np.array(data["segs"]["burgers"])          # shape: (N_segs, 3)
+        cell = DM.cell
+            
+        # Calculate positions of segment middle points
+        r1 = np.array(cell.closest_image(Rref=np.array(cell.center()), R=rn[segsnid[:,0]]))
+        r2 = np.array(cell.closest_image(Rref=r1, R=rn[segsnid[:,1]]))
+        r_ij = r2 - r1
+        Rseg = 0.5 * (r1 + r2)        
+        
+        # Get stress in the midpoint of segment (segment-wise stress)
+        segment_midpoint_stress = self.SearchSegmentStress(Rseg, cell, state, seg_node_ids=segsnid)
+
+        # Calculate segment-wise current PK force
+        sig_remote = segment_midpoint_stress[:,[0,5,4,5,1,3,4,3,2]].reshape(-1,3,3) # Transform user_stress to 3by3 matrix
+        sigb = np.einsum('kij,kj->ki', sig_remote, b_ij) # sigma*burgers for each segments
+        fpkremote = 0.5 * np.cross(sigb, r_ij) # equally split calculated PKforce
+        
+        print("[AddUserStress] PK forces from user stress:")
+        print(fpkremote)
+
+        # Add to nodal force
+        #f = G.get_forces() # current nodal forces
+        f = state.get("nodeforces", np.zeros_like(rn))  # for DisNet
+        print("[AddUserStress] Original node forces:")
+        print(f)
+        
+        np.add.at(f, segsnid[:,0], fpkremote)
+        np.add.at(f, segsnid[:,1], fpkremote)
+        
+        print("[AddUserStress] Updated node forces:")
+        print(f)
+
+        # store new forces in state dictionnary
+        state["nodeforces"] = f
 
         return state
 
@@ -140,7 +191,20 @@ class CalForce(CalForce_Base):
             print(f"Segment {key}: {stress}")
         
         return state
-
+    
+    # (09/04/2025, kyeongmi) Search segment id and return appropriate stress in that segment 
+    def SearchSegmentStress(self, R, cell, state, seg_node_ids=None):
+        seg_stress_dict = self.segment_stress
+        R = np.atleast_2d(R)
+        seg_midpoint_stress = np.zeros((R.shape[0],6)) # xx,yy,zz,yz,xz,xy in Pa
+        if seg_node_ids is not None:
+            for i, (n1, n2) in enumerate(seg_node_ids):
+                key = (n1, n2) if n1 <= n2 else (n2, n1)
+                stress = seg_stress_dict.get(key, np.zeros(6)) # fallback to zero stress
+                print(f"[UserStress] Segment ({n1},{n2}) → Stress: {stress}")
+                seg_midpoint_stress[i, :] = stress
+        return seg_midpoint_stress
+    
     def NodeForce(self, DM: DisNetManager, state: dict, pre_compute: bool=True) -> dict:
         """NodeForce: compute all nodal forces and store them in the state dictionary
         """

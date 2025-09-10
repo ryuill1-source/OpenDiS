@@ -4,6 +4,7 @@ import time
 def wait_aba(foldername_ABAQUS, ABAQUS_jobname, num_cpus, flag_type = "stress_ready", flag_check_interval=1.0):
     """
     Wait until ABAQUS fortran calculation
+    (08/14/2025, kyeongmi) [Completed] Modified to work with OpenDiS.eig_fem
     """
 
 

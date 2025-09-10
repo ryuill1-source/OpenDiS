@@ -540,7 +540,8 @@ class Nucleation:
 
         # call 
         c = np.asarray(st["center"], float)
-        R = float(st["loopR"])
+        #R = float(st["loopR"])
+        R = float(200)
         nrm = np.asarray(st["normal"], float)
         bvec = np.asarray(st["burgers"], float)
 
@@ -549,8 +550,8 @@ class Nucleation:
         num_max = int(st.get("num_max", 10))
         seg_len = float(st.get("seg_len", st.get("mexseg", 15.0)))
         est = int(2.0 * np.pi * R / max(seg_len, 1e-9))
-
-        nnode = est
+        #nnode = max(5, min(num_max, max(num_min, est)))
+        nnode = int(6)
 
         # lower bound
         if nnode < num_min:
